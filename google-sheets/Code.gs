@@ -3,8 +3,8 @@
  * Cada tabela do sistema vira uma aba. A coluna "_json" é a fonte de verdade:
  * as outras colunas são só para você ler/filtrar. Para alterar dados, use o sistema.
  */
-const TOKEN = 'TROQUE-ESTE-TOKEN';   // invente uma senha longa e repita em config.js
-const COLS = ['users', 'paymentMethods', 'saleTypes', 'suppliers', 'products', 'customers', 'entries', 'sales', 'transfers', 'orders'];
+const TOKEN = 'iUgjZhuG-pnM8M8UQAV31MOxZicO5ooO';   // invente uma senha longa e repita em config.js
+const COLS = ['users', 'paymentMethods', 'saleTypes', 'suppliers', 'products', 'customers', 'entries', 'sales', 'transfers', 'orders', 'locations'];
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
