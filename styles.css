@@ -117,6 +117,7 @@ tfoot td{font-weight:700;background:var(--surface2)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--gold);color:var(--text);padding:11px 20px;border-radius:10px;z-index:60;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 .toast.err{border-color:var(--bad)}
 
+.withplus{display:flex;gap:8px}.withplus select{flex:1;min-width:0}.withplus .btn{padding:0 16px;font-size:20px;line-height:1}
 .menu-btn{display:none}
 .print-title{display:none}
 

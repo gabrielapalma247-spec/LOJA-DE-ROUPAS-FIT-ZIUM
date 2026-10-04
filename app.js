@@ -252,6 +252,7 @@ function fieldHTML(f, v) {
   if (f.type === 'select') {
     const opts = f.options();
     input = `<select name="${f.name}" ${req} ${on}>${f.blank !== undefined ? `<option value="">${esc(f.blank || '—')}</option>` : ''}${opts.map(o => `<option value="${esc(o.v)}" ${String(o.v) === String(val) ? 'selected' : ''}>${esc(o.t)}</option>`).join('')}</select>`;
+    if (f.quick) input = `<div class="withplus">${input}<button type="button" class="btn ghost" data-act="quickAdd" data-kind="${f.quick}" data-field="${f.name}" title="Cadastrar ${f.quick === 'products' ? 'novo produto' : 'novo fornecedor'}">+</button></div>`;
   } else if (f.type === 'checkbox') {
     return `<div class="${f.full ? 'full' : ''}"><label class="chk"><input type="checkbox" name="${f.name}" ${val ? 'checked' : ''}> ${esc(f.label)}</label></div>`;
   } else if (f.type === 'textarea') {
@@ -259,7 +260,7 @@ function fieldHTML(f, v) {
   } else {
     const dl = f.list ? `list="dl_${f.name}"` : '';
     input = `<input name="${f.name}" type="${f.type || 'text'}" value="${esc(val)}" ${req} ${on} ${dl}
-      ${f.step ? `step="${f.step}"` : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''} ${f.type === 'password' ? 'autocomplete="new-password"' : 'autocomplete="off"'}>
+      ${f.readonly ? 'readonly tabindex="-1" style="opacity:.75"' : ''} ${f.step ? `step="${f.step}"` : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''} ${f.type === 'password' ? 'autocomplete="new-password"' : 'autocomplete="off"'}>
       ${f.list ? `<datalist id="dl_${f.name}">${f.list().map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : ''}`;
   }
   return `<div class="${f.full ? 'full' : ''}"><label>${esc(f.label)}${f.required ? ' *' : ''}</label>${input}${f.hint ? `<div class="muted sm" style="margin-top:4px">${esc(f.hint)}</div>` : ''}</div>`;
@@ -279,6 +280,31 @@ function modalForm(title, fields, vals, onSave, saveLabel = 'Salvar') {
   modalCtx = { fields, onSave };
   openModal(`<h2>${esc(title)}</h2><form data-form="modal">${fieldsHTML(fields, vals)}
     <div class="foot"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn">${saveLabel}</button></div></form>`);
+}
+
+/* ---------- cadastro rápido (botão +) dentro de outros formulários ---------- */
+let modal2Ctx = null;
+function modal2Form(title, fields, vals, onSave) {
+  let m = $('#modal2');
+  if (!m) { m = document.createElement('div'); m.id = 'modal2'; m.className = 'modal'; m.style.zIndex = 55; document.body.appendChild(m); }
+  modal2Ctx = { fields, onSave };
+  m.innerHTML = `<div class="box"><h2>${esc(title)}</h2><form data-form="modal2">${fieldsHTML(fields, vals)}<div class="foot"><button type="button" class="btn ghost" data-act="closeModal2">Cancelar</button><button class="btn">Salvar</button></div></form></div>`;
+  m.hidden = false;
+}
+function closeModal2() { const m = $('#modal2'); if (m) { m.hidden = true; m.innerHTML = ''; } modal2Ctx = null; }
+function quickAdd(kind, form, fname) {
+  const sc = SCHEMA[kind], pre = {};
+  if (kind === 'products' && form.elements.supplierId && form.elements.supplierId.value) pre.supplierId = form.elements.supplierId.value;
+  modal2Form(`Novo ${sc.one}`, sc.fields(null), pre, async d => {
+    const err = await saveRecord(kind, d, null); if (err) return err;
+    const rec = sc.list()[sc.list().length - 1];
+    const sel = form.elements[fname]; if (!sel) return;
+    const blank = sel.querySelector('option[value=""]');
+    const opts = kind === 'products' ? prodOpts(false, rec.id) : optsOf(db.suppliers, rec.id);
+    sel.innerHTML = (blank ? blank.outerHTML : '') + opts.map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('');
+    sel.value = rec.id; sel.dispatchEvent(new Event('change', { bubbles: true }));
+    toast(`${sc.one[0].toUpperCase() + sc.one.slice(1)} cadastrado e selecionado.`);
+  });
 }
 
 /* ---------- opções de selects ---------- */
@@ -418,8 +444,8 @@ function orderModal(pid, orderId) {
   const lead = p ? leadFor(p) : 0;
   const fields = [
     { name: 'date', label: 'Data do pedido', type: 'date', required: true, default: today(), on: 'orderCalc' },
-    { name: 'productId', label: 'Produto', type: 'select', required: true, options: () => prodOpts(false, pid), blank: 'Selecione…', on: 'orderProd' },
-    { name: 'supplierId', label: 'Fornecedor', type: 'select', options: () => optsOf(db.suppliers, p?.supplierId), blank: '—' },
+    { name: 'productId', label: 'Produto', type: 'select', required: true, options: () => prodOpts(false, pid), blank: 'Selecione…', on: 'orderProd', quick: 'products' },
+    { name: 'supplierId', label: 'Fornecedor', type: 'select', options: () => optsOf(db.suppliers, p?.supplierId), blank: '—', quick: 'suppliers' },
     { name: 'qty', label: 'Quantidade', type: 'number', min: 1, step: 1, required: true },
     { name: 'expectedDate', label: 'Previsão de chegada', type: 'date', required: true, hint: 'Calculada pelo prazo do fornecedor/produto. Pode ajustar.' }
   ];
@@ -438,11 +464,11 @@ function viewEntrada() {
   const fields = [
     { name: 'date', label: 'Data de entrada', type: 'date', required: true, default: today() },
     { name: 'kind', label: 'Tipo', type: 'select', options: () => [{ v: 'compra', t: 'Compra de fornecedor' }, { v: 'devolucao', t: 'Devolução de transferência / ajuste' }] },
-    { name: 'productId', label: 'Produto', type: 'select', required: true, blank: 'Selecione…', options: () => prodOpts(false), on: 'entryProd', full: true },
+    { name: 'productId', label: 'Produto', type: 'select', required: true, blank: 'Selecione…', options: () => prodOpts(false), on: 'entryProd', full: true, quick: 'products' },
     { name: 'qty', label: 'Quantidade', type: 'number', min: 1, step: 1, required: true },
     { name: 'buyPrice', label: 'Valor de compra (un.)', type: 'number', min: 0, step: 0.01, required: true },
     { name: 'sellPrice', label: 'Valor de venda (un.)', type: 'number', min: 0, step: 0.01, required: true },
-    { name: 'supplierId', label: 'Fornecedor', type: 'select', blank: '—', options: () => optsOf(db.suppliers) },
+    { name: 'supplierId', label: 'Fornecedor', type: 'select', blank: '—', options: () => optsOf(db.suppliers), quick: 'suppliers' },
     { name: 'orderId', label: 'Dar baixa no pedido', type: 'select', blank: 'Nenhum', options: () => [] },
     { name: 'note', label: 'Observação / nota fiscal', full: true }
   ];
@@ -572,7 +598,8 @@ const SCHEMA = {
   products: {
     title: 'Produtos', one: 'produto', list: () => db.products,
     fields: v => [
-      { name: 'tipo', label: 'Tipo de produto', required: true, ph: 'Legging, Macacão, Garrafa…', list: () => [...new Set(db.products.map(p => p.tipo))], hint: 'Define o prefixo do SKU (ex.: Legging → LEG-001).' },
+      { name: 'tipo', label: 'Tipo de produto', required: true, ph: 'Legging, Macacão, Garrafa…', list: () => [...new Set(db.products.map(p => p.tipo))], hint: 'Define o prefixo do SKU (ex.: Legging → LEG-001).', on: v ? undefined : 'skuPrev' },
+      { name: 'sku', label: 'SKU (gerado automaticamente)', readonly: true, default: v ? v.sku : '', ph: 'Aparece ao digitar o tipo' },
       { name: 'name', label: 'Nome / modelo', required: true },
       { name: 'size', label: 'Tamanho' }, { name: 'color', label: 'Cor' },
       { name: 'supplierId', label: 'Fornecedor', type: 'select', blank: '—', options: () => optsOf(db.suppliers, v?.supplierId) },
@@ -665,6 +692,7 @@ async function saveRecord(kind, d, id) {
       if (dup) return `Já existe cliente com esse telefone: ${dup.name}.`;
     }
     if (kind === 'products') { d.buyPrice = num(d.buyPrice); d.sellPrice = num(d.sellPrice); d.minStock = num(d.minStock); }
+    if (kind === 'products') delete d.sku;
     const rec = cur || { id: uid() };
     Object.assign(rec, d);
     if (kind === 'products' && !rec.sku) rec.sku = skuFor(d.tipo);
@@ -760,6 +788,8 @@ const ACT = {
   menu() { $('#side').classList.toggle('open'); },
   closeMenu() { const s = $('#side'); if (s) s.classList.remove('open'); },
   closeModal,
+  closeModal2,
+  quickAdd(el) { quickAdd(el.dataset.kind, el.closest('form'), el.dataset.field); },
   clearDf() { ui.df = {}; rerender(); },
   back() {
     navStack.pop();
@@ -825,6 +855,12 @@ const FORM = {
     me = u; localStorage.setItem(SES, u.id); if (!location.hash) go('dashboard'); render();
     if (u.defaultPw) setTimeout(() => toast('Troque a senha padrão em "Trocar senha" (menu lateral).', true), 400);
   },
+  async modal2(f) {
+    if (!modal2Ctx) return;
+    const d = formData(f, modal2Ctx.fields), err = await modal2Ctx.onSave(d);
+    if (err) return toast(err, true);
+    closeModal2();
+  },
   async modal(f) {
     if (!modalCtx) return;
     const d = formData(f, modalCtx.fields), err = await modalCtx.onSave(d);
@@ -883,6 +919,7 @@ const ON = {
   vq(el) { ui.vq = el.value; keepFocus(el); }, vtype(el) { ui.vtype = el.value; rerender(); }, vpay(el) { ui.vpay = el.value; rerender(); },
   cq(el) { ui.cq = el.value; keepFocus(el); },
   df(el) { ui.df = ui.df || {}; ui.df[el.dataset.k] = el.value; if (el.dataset.k === 'tipo') ui.df.productId = ''; rerender(); },
+  skuPrev(el) { const f = el.form; if (f && f.elements.sku) f.elements.sku.value = el.value.trim() ? skuFor(el.value) : ''; },
   touch(el) { el.dataset.t = 1; },
   custq() { updateCustBox(); },
   saleCalc() { calcSale(); },
@@ -931,6 +968,7 @@ document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (a && ACT[a.dataset.act]) { if (a.tagName === 'A' && a.dataset.act === 'closeMenu') return ACT.closeMenu(); e.preventDefault(); ACT[a.dataset.act](a, e); return; }
   if (e.target.id === 'modal') closeModal();
+  if (e.target.id === 'modal2') closeModal2();
 });
 document.addEventListener('submit', e => {
   const f = e.target.closest('form[data-form]'); if (!f || !FORM[f.dataset.form]) return;
@@ -939,7 +977,7 @@ document.addEventListener('submit', e => {
 const onEvt = e => { const el = e.target.closest('[data-on]'); if (el && ON[el.dataset.on]) ON[el.dataset.on](el, e); };
 document.addEventListener('input', e => { const t = e.target; if (t.type === 'checkbox' || t.type === 'file' || t.tagName === 'SELECT' || t.type === 'date') return; onEvt(e); });
 document.addEventListener('change', e => { const t = e.target; if (t.type === 'checkbox' || t.type === 'file' || t.tagName === 'SELECT' || t.type === 'date') onEvt(e); else if (t.dataset && t.dataset.on === 'custq') onEvt(e); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m2 = $('#modal2'); if (m2 && !m2.hidden) closeModal2(); else if (!$('#modal').hidden) closeModal(); } });
 /* pilha de navegação para o botão Voltar */
 const navStack = []; let goingBack = false;
 function trackNav() {
