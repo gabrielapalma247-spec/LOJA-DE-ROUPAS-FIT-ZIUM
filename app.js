@@ -31,6 +31,7 @@ function defaults() {
   const mk = n => ({ id: uid(), name: n, active: true });
   return {
     users: [],
+    locations: ['Casa', 'Loja'].map(mk),
     paymentMethods: ['Pix', 'Dinheiro', 'Cartão de débito', 'Cartão de crédito'].map(mk),
     saleTypes: ['Vendas da loja', 'Vendas por indicação', 'Vendas redes sociais', 'Outros'].map(mk),
     suppliers: [], products: [], customers: [], entries: [], sales: [], transfers: [], orders: []
@@ -109,12 +110,20 @@ const byId = (list, id) => list.find(x => x.id === id);
 const prodLabel = p => p ? `${p.sku} · ${p.name}${p.size ? ' ' + p.size : ''}${p.color ? ' · ' + p.color : ''}` : '(removido)';
 const prodShort = p => p ? `${p.name}${p.size ? ' ' + p.size : ''}${p.color ? ' ' + p.color : ''}` : '(removido)';
 
-function stockMap() {
+const defLoc = () => (db.locations[0] || {}).id || '';
+const locOf = x => x.locationId || defLoc();
+const locName = id => (byId(db.locations, id) || {}).name || '—';
+/* estoque por produto; com `loc` considera só aquele local (Casa/Loja), sem `loc` soma todos */
+function stockMap(loc) {
   const m = {};
   for (const p of db.products) m[p.id] = 0;
-  for (const e of db.entries) m[e.productId] = (m[e.productId] || 0) + e.qty;
-  for (const s of db.sales) for (const i of s.items) m[i.productId] = (m[i.productId] || 0) - i.qty;
-  for (const t of db.transfers) m[t.productId] = (m[t.productId] || 0) - t.qty;
+  for (const e of db.entries) if (!loc || locOf(e) === loc) m[e.productId] = (m[e.productId] || 0) + e.qty;
+  for (const s of db.sales) if (!loc || locOf(s) === loc) for (const i of s.items) m[i.productId] = (m[i.productId] || 0) - i.qty;
+  for (const t of db.transfers) {
+    const from = t.fromId || defLoc(), to = t.toId || '';
+    if (!loc) { if (!to) m[t.productId] = (m[t.productId] || 0) - t.qty; }
+    else { if (from === loc) m[t.productId] = (m[t.productId] || 0) - t.qty; if (to === loc) m[t.productId] = (m[t.productId] || 0) + t.qty; }
+  }
   return m;
 }
 function avgDaily(pid, days = 30) {
@@ -310,8 +319,10 @@ function quickAdd(kind, form, fname) {
 /* ---------- opções de selects ---------- */
 const activeOf = list => list.filter(x => x.active !== false);
 const optsOf = (list, cur) => list.filter(x => x.active !== false || x.id === cur).map(x => ({ v: x.id, t: x.name }));
-const prodOpts = (onlyStock, cur) => {
-  const sm = stockMap();
+const locOpts = cur => optsOf(db.locations, cur);
+const locSel = () => db.locations.length > 1 ? `<div class="seg no-print"><button data-act="loc" data-k="" class="${!ui.loc ? 'on' : ''}">Todos os estoques</button>${db.locations.filter(l => l.active !== false).map(l => `<button data-act="loc" data-k="${l.id}" class="${ui.loc === l.id ? 'on' : ''}">${esc(l.name)}</button>`).join('')}</div>` : '';
+const prodOpts = (onlyStock, cur, loc) => {
+  const sm = stockMap(loc);
   return db.products.filter(p => (p.active !== false || p.id === cur) && (!onlyStock || sm[p.id] > 0))
     .sort((a, b) => a.name.localeCompare(b.name)).map(p => ({ v: p.id, t: prodLabel(p) + (onlyStock ? ` (${sm[p.id]} un)` : '') }));
 };
@@ -322,9 +333,9 @@ const prodOpts = (onlyStock, cur) => {
 function viewDashboard() {
   const R = range(ui.per), F = ui.df || {};
   const pOk = p => (!F.tipo || p.tipo === F.tipo) && (!F.productId || p.id === F.productId) && (!F.supplierId || p.supplierId === F.supplierId);
-  const fSales = list => list.filter(s => (!F.typeId || s.typeId === F.typeId) && (!F.paymentId || s.paymentId === F.paymentId) && (!F.customerId || s.customerId === F.customerId) && (!F.userId || s.userId === F.userId))
+  const fSales = list => list.filter(s => (!F.typeId || s.typeId === F.typeId) && (!F.paymentId || s.paymentId === F.paymentId) && (!F.customerId || s.customerId === F.customerId) && (!F.userId || s.userId === F.userId) && (!F.locationId || locOf(s) === F.locationId))
     .map(s => { const items = s.items.filter(i => { const p = prod(i.productId); return p && pOk(p); }); return { ...s, items, total: sum(items, i => i.qty * i.price) }; }).filter(s => s.items.length);
-  const eOk = e => { const p = prod(e.productId); return !!p && pOk(p); };
+  const eOk = e => { const p = prod(e.productId); return !!p && pOk(p) && (!F.locationId || locOf(e) === F.locationId); };
   const PF = db.products.filter(pOk);
   const S = fSales(db.sales.filter(s => inRange(s.date, R)));
   const E = db.entries.filter(e => e.kind !== 'devolucao' && inRange(e.date, R) && eOk(e));
@@ -332,6 +343,7 @@ function viewDashboard() {
   const fsel = (k, label, opts) => `<div><label>${label}</label><select data-on="df" data-k="${k}"><option value="">Todos</option>${opts.map(o => `<option value="${esc(o.v)}" ${F[k] === o.v ? 'selected' : ''}>${esc(o.t)}</option>`).join('')}</select></div>`;
   const filtros = `<div class="card no-print" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;margin-bottom:12px"><h3>Filtros${nF ? ` · ${nF} ativo(s)` : ''}</h3>${nF ? '<button class="btn ghost sm" data-act="clearDf">Limpar filtros</button>' : ''}</div>
     <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
+    ${db.locations.length > 1 ? fsel('locationId', 'Estoque (local)', db.locations.map(x => ({ v: x.id, t: x.name }))) : ''}
     ${fsel('typeId', 'Tipo de venda', db.saleTypes.map(x => ({ v: x.id, t: x.name })))}
     ${fsel('paymentId', 'Forma de pagamento', db.paymentMethods.map(x => ({ v: x.id, t: x.name })))}
     ${fsel('tipo', 'Tipo de produto', [...new Set(db.products.map(p => p.tipo))].sort().map(t => ({ v: t, t })))}
@@ -339,10 +351,10 @@ function viewDashboard() {
     ${fsel('supplierId', 'Fornecedor', db.suppliers.map(x => ({ v: x.id, t: x.name })))}
     ${fsel('customerId', 'Cliente', db.customers.slice().sort((a, b) => a.name.localeCompare(b.name)).map(x => ({ v: x.id, t: x.name })))}
     ${fsel('userId', 'Vendedor(a)', db.users.map(x => ({ v: x.id, t: x.name })))}</div>
-    ${F.typeId || F.paymentId || F.customerId || F.userId ? '<div class="muted sm" style="margin-top:10px">Filtros de venda (tipo, pagamento, cliente, vendedor) valem só para as vendas; compras e estoque seguem os filtros de produto/fornecedor.</div>' : ''}</div>`;
+    ${F.typeId || F.paymentId || F.customerId || F.userId || F.locationId ? '<div class="muted sm" style="margin-top:10px">Filtros de venda (tipo, pagamento, cliente, vendedor) valem só para as vendas; compras e estoque seguem os filtros de produto/fornecedor.</div>' : ''}</div>`;
   const receita = sum(S, s => s.total), custo = sum(S, saleCost), compras = sum(E, e => e.qty * e.buyPrice);
   const lucro = receita - custo, saldo = receita - compras, margem = receita ? lucro / receita * 100 : 0;
-  const sm = stockMap();
+  const sm = stockMap(F.locationId || undefined);
   const stCusto = sum(PF, p => Math.max(0, sm[p.id] || 0) * num(p.buyPrice));
   const stVenda = sum(PF, p => Math.max(0, sm[p.id] || 0) * num(p.sellPrice));
   const stQtd = sum(PF, p => Math.max(0, sm[p.id] || 0));
@@ -414,8 +426,8 @@ function barChart(months) {
    ESTOQUE
    ========================================================= */
 function viewEstoque() {
-  const sm = stockMap(), q = norm(ui.estq || '');
-  const rows = db.products.map(p => ({ p, stock: sm[p.id] || 0 })).map(x => ({ ...x, r: reorder(x.p, x.stock) }))
+  const smAll = stockMap(), sm = ui.loc ? stockMap(ui.loc) : smAll, locMaps = db.locations.map(l => [l, stockMap(l.id)]), q = norm(ui.estq || '');
+  const rows = db.products.map(p => ({ p, stock: sm[p.id] || 0, total: smAll[p.id] || 0 })).map(x => ({ ...x, r: reorder(x.p, x.total) }))
     .filter(x => (!q || norm(`${x.p.sku} ${x.p.name} ${x.p.tipo} ${x.p.color} ${x.p.size}`).includes(q)) && (!ui.onlyAlert || x.r.st !== 'ok') && (ui.showInactive || x.p.active !== false))
     .sort((a, b) => a.p.name.localeCompare(b.p.name));
   const lastEntry = pid => db.entries.filter(e => e.productId === pid).map(e => e.date).sort().pop();
@@ -426,14 +438,14 @@ function viewEstoque() {
     ${orders.sort((a, b) => (a.expectedDate || '').localeCompare(b.expectedDate || '')).map(o => `<tr><td>${fdate(o.date)}</td><td>${esc(prodLabel(prod(o.productId)))}</td><td>${esc(sup(o.supplierId)?.name || '—')}</td><td class="num">${o.qty}</td>
     <td>${fdate(o.expectedDate)} ${o.expectedDate && o.expectedDate < today() ? '<span class="pill bad">atrasado</span>' : ''}</td>
     <td class="act"><button class="btn sm" data-act="recvOrder" data-id="${o.id}">Receber</button> <button class="btn ghost sm" data-act="cancelOrder" data-id="${o.id}">Cancelar</button></td></tr>`).join('')}</tbody></table></div></div>` : ''}
-  <div class="row no-print" style="margin-bottom:14px"><input style="max-width:300px" placeholder="Buscar SKU, produto, cor…" value="${esc(ui.estq || '')}" data-on="estq">
+  <div class="row no-print" style="margin-bottom:14px">${locSel()}<input style="max-width:300px" placeholder="Buscar SKU, produto, cor…" value="${esc(ui.estq || '')}" data-on="estq">
     <label class="chk"><input type="checkbox" ${ui.onlyAlert ? 'checked' : ''} data-on="onlyAlert"> só com alerta</label>
     <label class="chk"><input type="checkbox" ${ui.showInactive ? 'checked' : ''} data-on="showInactive"> mostrar inativos</label></div>
   <div class="tw"><table><thead><tr><th>SKU</th><th>Produto</th><th>Fornecedor</th><th class="num">Estoque</th><th class="num">Pto. pedido</th><th class="num">Custo</th><th class="num">Venda</th><th>Últ. entrada</th><th>Situação</th><th></th></tr></thead><tbody>
-  ${rows.length ? rows.map(({ p, stock, r }) => `<tr><td><b>${esc(p.sku)}</b></td><td>${esc(prodShort(p))}<div class="muted sm">${esc(p.tipo)}</div></td><td>${esc(sup(p.supplierId)?.name || '—')}</td>
-    <td class="num"><b style="color:${stock <= 0 ? 'var(--bad)' : 'inherit'}">${stock}</b></td><td class="num muted" title="Venda média ${r.avg.toFixed(2)}/dia × prazo ${r.lead}d + mínimo ${p.minStock || 0}">${r.rop}</td>
+  ${rows.length ? rows.map(({ p, stock, total, r }) => `<tr><td><b>${esc(p.sku)}</b></td><td>${esc(prodShort(p))}<div class="muted sm">${esc(p.tipo)}</div></td><td>${esc(sup(p.supplierId)?.name || '—')}</td>
+    <td class="num"><b style="color:${stock <= 0 ? 'var(--bad)' : 'inherit'}">${stock}</b>${!ui.loc && db.locations.length > 1 ? `<div class="muted sm">${locMaps.map(([l, m]) => `${esc(l.name)} ${m[p.id] || 0}`).join(' · ')}</div>` : ''}</td><td class="num muted" title="Venda média ${r.avg.toFixed(2)}/dia × prazo ${r.lead}d + mínimo ${p.minStock || 0}">${r.rop}</td>
     <td class="num">${brl(p.buyPrice)}</td><td class="num">${brl(p.sellPrice)}</td><td class="muted">${fdate(lastEntry(p.id)) || '—'}</td><td>${stPill(r.st)}${r.st === 'ok' && p.active === false ? ' <span class="pill">inativo</span>' : ''}</td>
-    <td class="act">${r.st === 'pedir' || r.st === 'zerado' || r.st === 'atrasado' ? `<button class="btn sm" data-act="newOrder" data-pid="${p.id}">Pedir</button>` : ''}</td></tr>`).join('')
+    <td class="act">${r.st === 'pedir' || r.st === 'zerado' || r.st === 'atrasado' ? `<button class="btn sm" data-act="newOrder" data-pid="${p.id}">Pedir</button> ` : ''}${stock > 0 ? `<button class="btn danger sm" data-act="zeroStock" data-pid="${p.id}">Excluir estoque</button>` : ''}</td></tr>`).join('')
     : `<tr><td colspan="10" class="empty">${db.products.length ? 'Nada encontrado.' : 'Nenhum produto ainda. Comece em Cadastros → Produtos.'}</td></tr>`}</tbody></table></div>
   <p class="muted sm" style="margin-top:10px">Ponto de pedido = venda média diária (últimos 30 dias) × prazo de entrega + estoque mínimo. Passe o mouse no número para ver a conta.</p>`;
 }
@@ -446,6 +458,7 @@ function orderModal(pid, orderId) {
     { name: 'date', label: 'Data do pedido', type: 'date', required: true, default: today(), on: 'orderCalc' },
     { name: 'productId', label: 'Produto', type: 'select', required: true, options: () => prodOpts(false, pid), blank: 'Selecione…', on: 'orderProd', quick: 'products' },
     { name: 'supplierId', label: 'Fornecedor', type: 'select', options: () => optsOf(db.suppliers, p?.supplierId), blank: '—', quick: 'suppliers' },
+    { name: 'locationId', label: 'Chega em qual estoque', type: 'select', required: true, options: () => locOpts(), default: ui.lastLoc || defLoc() },
     { name: 'qty', label: 'Quantidade', type: 'number', min: 1, step: 1, required: true },
     { name: 'expectedDate', label: 'Previsão de chegada', type: 'date', required: true, hint: 'Calculada pelo prazo do fornecedor/produto. Pode ajustar.' }
   ];
@@ -464,6 +477,7 @@ function viewEntrada() {
   const fields = [
     { name: 'date', label: 'Data de entrada', type: 'date', required: true, default: today() },
     { name: 'kind', label: 'Tipo', type: 'select', options: () => [{ v: 'compra', t: 'Compra de fornecedor' }, { v: 'devolucao', t: 'Devolução de transferência / ajuste' }] },
+    { name: 'locationId', label: 'Entra em qual estoque', type: 'select', required: true, options: () => locOpts(), default: ui.lastLoc || defLoc() },
     { name: 'productId', label: 'Produto', type: 'select', required: true, blank: 'Selecione…', options: () => prodOpts(false), on: 'entryProd', full: true, quick: 'products' },
     { name: 'qty', label: 'Quantidade', type: 'number', min: 1, step: 1, required: true },
     { name: 'buyPrice', label: 'Valor de compra (un.)', type: 'number', min: 0, step: 0.01, required: true },
@@ -472,16 +486,16 @@ function viewEntrada() {
     { name: 'orderId', label: 'Dar baixa no pedido', type: 'select', blank: 'Nenhum', options: () => [] },
     { name: 'note', label: 'Observação / nota fiscal', full: true }
   ];
-  const vals = p ? { productId: p.id, qty: pf.qty, buyPrice: p.buyPrice, sellPrice: p.sellPrice, supplierId: p.supplierId } : {};
+  const vals = p ? { locationId: pf.locationId, productId: p.id, qty: pf.qty, buyPrice: p.buyPrice, sellPrice: p.sellPrice, supplierId: p.supplierId } : {};
   ui.entryOrderPre = pf.orderId || '';
-  const E = db.entries.filter(e => inRange(e.date, range(ui.per))).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0)).slice(0, 100);
+  const E = db.entries.filter(e => inRange(e.date, range(ui.per)) && (!ui.loc || locOf(e) === ui.loc)).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0)).slice(0, 100);
   return `<div class="page-head"><div><h1>Entrada de estoque</h1><p>Registre a mercadoria que chegou, o valor de compra e o preço que vai vender.</p></div></div>
   <form class="card" data-form="entry">${fieldsHTML(fields, vals)}
     <div class="row" style="margin-top:18px"><button class="btn">Registrar entrada</button><button class="btn ghost" data-again="1">Salvar e lançar outra</button></div></form>
-  <div class="page-head" style="margin-top:28px"><h2>Entradas do período</h2>${periodSel()}</div>
-  <div class="tw"><table><thead><tr><th>Data</th><th>Produto</th><th>Fornecedor</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Compra un.</th><th class="num">Venda un.</th><th class="num">Total compra</th><th></th></tr></thead><tbody>
-  ${E.length ? E.map(e => `<tr><td>${fdate(e.date)}</td><td>${esc(prodLabel(prod(e.productId)))}${e.note ? `<div class="muted sm">${esc(e.note)}</div>` : ''}</td><td>${esc(sup(e.supplierId)?.name || '—')}</td><td>${e.kind === 'devolucao' ? '<span class="pill info">Devolução</span>' : 'Compra'}</td>
-  <td class="num">${e.qty}</td><td class="num">${brl(e.buyPrice)}</td><td class="num">${brl(e.sellPrice)}</td><td class="num">${e.kind === 'devolucao' ? '—' : brl(e.qty * e.buyPrice)}</td><td class="act"><button class="btn danger sm" data-act="delEntry" data-id="${e.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="9" class="empty">Nenhuma entrada no período.</td></tr>`}</tbody></table></div>`;
+  <div class="page-head" style="margin-top:28px"><h2>Entradas do período</h2><div class="row">${locSel()}${periodSel()}</div></div>
+  <div class="tw"><table><thead><tr><th>Data</th><th>Produto</th><th>Estoque</th><th>Fornecedor</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Compra un.</th><th class="num">Venda un.</th><th class="num">Total compra</th><th></th></tr></thead><tbody>
+  ${E.length ? E.map(e => `<tr><td>${fdate(e.date)}</td><td>${esc(prodLabel(prod(e.productId)))}${e.note ? `<div class="muted sm">${esc(e.note)}</div>` : ''}</td><td><span class="pill">${esc(locName(locOf(e)))}</span></td><td>${esc(sup(e.supplierId)?.name || '—')}</td><td>${e.kind === 'devolucao' ? '<span class="pill info">Devolução</span>' : 'Compra'}</td>
+  <td class="num">${e.qty}</td><td class="num">${brl(e.buyPrice)}</td><td class="num">${brl(e.sellPrice)}</td><td class="num">${e.kind === 'devolucao' ? '—' : brl(e.qty * e.buyPrice)}</td><td class="act"><button class="btn danger sm" data-act="delEntry" data-id="${e.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="10" class="empty">Nenhuma entrada no período.</td></tr>`}</tbody></table></div>`;
 }
 function refreshOrderSelect() {
   const f = $('form[data-form=entry]'); if (!f) return;
@@ -498,18 +512,21 @@ function viewSaida() {
   const seg = `<div class="seg"><button data-act="saidaMode" data-k="venda" class="${ui.saidaMode === 'venda' ? 'on' : ''}">Saída para venda</button><button data-act="saidaMode" data-k="transf" class="${ui.saidaMode === 'transf' ? 'on' : ''}">Transferência de estoque</button></div>`;
   const head = `<div class="page-head"><div><h1>Saída de estoque</h1><p>Venda (gera o registro financeiro) ou transferência (só movimenta o estoque).</p></div>${seg}</div>`;
   if (ui.saidaMode === 'transf') {
+    const start = ui.lastLoc || defLoc();
     const fields = [
       { name: 'date', label: 'Data', type: 'date', required: true, default: today() },
-      { name: 'productId', label: 'Produto', type: 'select', required: true, blank: 'Selecione…', options: () => prodOpts(true) },
+      { name: 'fromId', label: 'Sai de qual estoque', type: 'select', required: true, options: () => locOpts(), default: start, on: 'transFrom' },
+      { name: 'toId', label: 'Vai para', type: 'select', blank: 'Outro destino (fora dos estoques)', options: () => locOpts() },
+      { name: 'productId', label: 'Produto', type: 'select', required: true, blank: 'Selecione…', options: () => prodOpts(true, null, start) },
       { name: 'qty', label: 'Quantidade', type: 'number', min: 1, step: 1, required: true },
-      { name: 'destino', label: 'Destino', required: true, ph: 'Ex.: Loja da Ana, evento, consignado…', list: () => [...new Set(db.transfers.map(t => t.destino))] },
+      { name: 'destino', label: 'Destino externo', ph: 'Só se for para fora: loja da Ana, evento, consignado…', list: () => [...new Set(db.transfers.map(t => t.destino).filter(Boolean))] },
       { name: 'note', label: 'Observação', full: true }
     ];
-    const T = db.transfers.filter(t => inRange(t.date, range(ui.per))).sort((a, b) => b.date.localeCompare(a.date));
+    const T = db.transfers.filter(t => inRange(t.date, range(ui.per)) && (!ui.loc || (t.fromId || defLoc()) === ui.loc || t.toId === ui.loc)).sort((a, b) => b.date.localeCompare(a.date));
     return head + `<form class="card" data-form="transfer">${fieldsHTML(fields)}<div class="row" style="margin-top:18px"><button class="btn">Registrar transferência</button></div></form>
-    <div class="page-head" style="margin-top:28px"><h2>Transferências do período</h2>${periodSel()}</div>
-    <div class="tw"><table><thead><tr><th>Data</th><th>Produto</th><th class="num">Qtd</th><th>Destino</th><th></th></tr></thead><tbody>
-    ${T.length ? T.map(t => `<tr><td>${fdate(t.date)}</td><td>${esc(prodLabel(prod(t.productId)))}</td><td class="num">${t.qty}</td><td>${esc(t.destino)}${t.note ? `<div class="muted sm">${esc(t.note)}</div>` : ''}</td><td class="act"><button class="btn danger sm" data-act="delTransfer" data-id="${t.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">Nenhuma transferência no período.</td></tr>`}</tbody></table></div>`;
+    <div class="page-head" style="margin-top:28px"><h2>Transferências do período</h2><div class="row">${locSel()}${periodSel()}</div></div>
+    <div class="tw"><table><thead><tr><th>Data</th><th>Produto</th><th class="num">Qtd</th><th>De</th><th>Para</th><th></th></tr></thead><tbody>
+    ${T.length ? T.map(t => `<tr><td>${fdate(t.date)}</td><td>${esc(prodLabel(prod(t.productId)))}</td><td class="num">${t.qty}</td><td>${esc(locName(t.fromId || defLoc()))}</td><td>${t.kind === 'baixa' ? '<span class="pill bad">Baixa (estoque excluído)</span>' : esc(t.toId ? locName(t.toId) : (t.destino || 'Fora dos estoques'))}${t.note && t.kind !== 'baixa' ? `<div class="muted sm">${esc(t.note)}</div>` : ''}</td><td class="act"><button class="btn danger sm" data-act="delTransfer" data-id="${t.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="6" class="empty">Nenhuma transferência no período.</td></tr>`}</tbody></table></div>`;
   }
   const typeOpts = optsOf(db.saleTypes), payOpts = optsOf(db.paymentMethods);
   const custList = db.customers.filter(c => c.active !== false);
@@ -518,6 +535,7 @@ function viewSaida() {
       <div><label>Data *</label><input type="date" name="date" value="${today()}" required></div>
       <div><label>Tipo de venda *</label><select name="typeId" required>${typeOpts.map(o => `<option value="${o.v}">${esc(o.t)}</option>`).join('')}</select></div>
       <div><label>Forma de pagamento *</label><select name="paymentId" required>${payOpts.map(o => `<option value="${o.v}">${esc(o.t)}</option>`).join('')}</select></div>
+      <div><label>Sai de qual estoque *</label><select name="locationId" data-on="saleLoc" required>${locOpts().map(o => `<option value="${o.v}" ${o.v === (ui.lastLoc || defLoc()) ? 'selected' : ''}>${esc(o.t)}</option>`).join('')}</select></div>
       <div class="full"><label>Cliente * <span class="muted">— digite nome ou telefone; se não existir, cadastre aqui mesmo</span></label>
         <input id="custq" data-on="custq" list="custlist" autocomplete="off" placeholder="Nome ou telefone do cliente" required>
         <datalist id="custlist">${custList.map(c => `<option value="${esc(c.name)} · ${esc(c.phone)}">`).join('')}</datalist>
@@ -531,7 +549,7 @@ function viewSaida() {
   <p class="muted sm" style="margin-top:10px">O histórico e a exclusão de vendas ficam na aba <a href="#/vendas">Vendas</a>.</p>`;
 }
 function addLine() {
-  const sm = stockMap();
+  const sm = stockMap((($('form[data-form=sale] [name=locationId]')) || {}).value || undefined);
   const opts = db.products.filter(p => p.active !== false && sm[p.id] > 0).sort((a, b) => a.name.localeCompare(b.name))
     .map(p => `<option value="${p.id}" data-price="${p.sellPrice}" data-stock="${sm[p.id]}">${esc(prodLabel(p))} (${sm[p.id]} un)</option>`).join('');
   $('#lines').insertAdjacentHTML('beforeend', `<div class="line"><div class="prod"><label>Produto</label><select name="productId" data-on="saleProd"><option value="">Selecione…</option>${opts}</select></div>
@@ -577,18 +595,18 @@ function updateCustBox() {
    ========================================================= */
 function viewVendas() {
   const R = range(ui.per), q = norm(ui.vq || '');
-  const S = db.sales.filter(s => inRange(s.date, R) && (!ui.vtype || s.typeId === ui.vtype) && (!ui.vpay || s.paymentId === ui.vpay)
+  const S = db.sales.filter(s => inRange(s.date, R) && (!ui.loc || locOf(s) === ui.loc) && (!ui.vtype || s.typeId === ui.vtype) && (!ui.vpay || s.paymentId === ui.vpay)
     && (!q || norm(`${cust(s.customerId)?.name} ${saleItemsText(s)}`).includes(q))).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0));
   const total = sum(S, s => s.total), lucro = total - sum(S, saleCost);
   const sel = (k, list, all) => `<select style="width:auto" data-on="${k}"><option value="">${all}</option>${list.map(x => `<option value="${x.id}" ${ui[k] === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`;
   return `<div class="page-head"><div><h1>Vendas</h1><p>${perLabel()}</p></div><a class="btn" href="#/saida">+ Nova venda</a></div>
-  <div class="row" style="margin-bottom:14px">${periodSel()}</div>
+  <div class="row" style="margin-bottom:14px">${locSel()}${periodSel()}</div>
   <div class="row" style="margin-bottom:14px"><input style="max-width:260px" placeholder="Buscar cliente ou produto…" value="${esc(ui.vq || '')}" data-on="vq">${sel('vtype', db.saleTypes, 'Todos os tipos')}${sel('vpay', db.paymentMethods, 'Todos os pagamentos')}</div>
   <div class="grid g4" style="margin-bottom:14px"><div class="kpi gold"><div class="l">Total vendido</div><div class="v">${brl(total)}</div></div><div class="kpi"><div class="l">Vendas</div><div class="v">${S.length}</div></div>
   <div class="kpi"><div class="l">Ticket médio</div><div class="v">${brl(S.length ? total / S.length : 0)}</div></div><div class="kpi ok"><div class="l">Lucro bruto</div><div class="v">${brl(lucro)}</div></div></div>
-  <div class="tw"><table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Tipo</th><th>Pagamento</th><th class="num">Total</th><th class="num">Lucro</th><th></th></tr></thead><tbody>
-  ${S.length ? S.map(s => `<tr><td>${fdate(s.date)}</td><td>${esc(cust(s.customerId)?.name || '—')}</td><td>${esc(saleItemsText(s))}</td><td>${esc(byId(db.saleTypes, s.typeId)?.name || '—')}</td><td>${esc(byId(db.paymentMethods, s.paymentId)?.name || '—')}</td>
-  <td class="num"><b>${brl(s.total)}</b></td><td class="num">${brl(s.total - saleCost(s))}</td><td class="act"><button class="btn danger sm" data-act="delSale" data-id="${s.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="8" class="empty">Nenhuma venda encontrada.</td></tr>`}</tbody></table></div>`;
+  <div class="tw"><table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Tipo</th><th>Pagamento</th><th>Estoque</th><th class="num">Total</th><th class="num">Lucro</th><th></th></tr></thead><tbody>
+  ${S.length ? S.map(s => `<tr><td>${fdate(s.date)}</td><td>${esc(cust(s.customerId)?.name || '—')}</td><td>${esc(saleItemsText(s))}</td><td>${esc(byId(db.saleTypes, s.typeId)?.name || '—')}</td><td>${esc(byId(db.paymentMethods, s.paymentId)?.name || '—')}</td><td><span class="pill">${esc(locName(locOf(s)))}</span></td>
+  <td class="num"><b>${brl(s.total)}</b></td><td class="num">${brl(s.total - saleCost(s))}</td><td class="act"><button class="btn danger sm" data-act="delSale" data-id="${s.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="9" class="empty">Nenhuma venda encontrada.</td></tr>`}</tbody></table></div>`;
 }
 
 /* =========================================================
@@ -615,7 +633,7 @@ const SCHEMA = {
     title: 'Clientes', one: 'cliente', list: () => db.customers,
     fields: () => [{ name: 'name', label: 'Nome', required: true }, { name: 'phone', label: 'Telefone', type: 'tel', required: true }, { name: 'birthday', label: 'Aniversário', type: 'date', hint: 'Opcional.' },
       { name: 'note', label: 'Observação', full: true }, { name: 'active', label: 'Ativo', type: 'checkbox', default: true }],
-    cols: [['Nome', c => `<b>${esc(c.name)}</b>`], ['Telefone', c => esc(c.phone)], ['Aniversário', c => c.birthday ? fdate(c.birthday).slice(0, 5) : '—'], ['Compras', c => String(db.sales.filter(s => s.customerId === c.id).length), 'num']],
+    cols: [['Nome', c => `<a href="#" data-act="custHist" data-id="${c.id}" style="color:inherit"><b>${esc(c.name)}</b></a>`], ['Telefone', c => esc(c.phone)], ['Aniversário', c => c.birthday ? fdate(c.birthday).slice(0, 5) : '—'], ['Compras', c => String(db.sales.filter(s => s.customerId === c.id).length), 'num']],
     search: c => `${c.name} ${c.phone}`
   },
   suppliers: {
@@ -625,6 +643,11 @@ const SCHEMA = {
       { name: 'note', label: 'Observação', full: true }, { name: 'active', label: 'Ativo', type: 'checkbox', default: true }],
     cols: [['Fornecedor', s => `<b>${esc(s.name)}</b>`], ['Contato', s => esc(s.phone || '—')], ['Prazo de entrega', s => `${num(s.leadDays)} dia(s)`, 'num'], ['Produtos', s => String(db.products.filter(p => p.supplierId === s.id).length), 'num']],
     search: s => `${s.name} ${s.phone}`
+  },
+  locations: {
+    title: 'Locais de estoque', one: 'local de estoque', list: () => db.locations,
+    fields: () => [{ name: 'name', label: 'Nome', required: true, ph: 'Casa, Loja…' }, { name: 'active', label: 'Ativo', type: 'checkbox', default: true }],
+    cols: [['Local', x => `<b>${esc(x.name)}</b>`], ['Status', x => x.active === false ? '<span class="pill">inativo</span>' : '<span class="pill ok">ativo</span>']], search: x => x.name
   },
   paymentMethods: {
     title: 'Formas de pagamento', one: 'forma de pagamento', list: () => db.paymentMethods,
@@ -645,7 +668,7 @@ const SCHEMA = {
     cols: [['Nome', u => `<b>${esc(u.name)}</b>`], ['Login', u => esc(u.login)], ['Perfil', u => u.role === 'admin' ? 'Administrador' : 'Vendedor(a)'], ['Status', u => u.active === false ? '<span class="pill">inativo</span>' : '<span class="pill ok">ativo</span>']], search: u => `${u.name} ${u.login}`
   }
 };
-const CAD_ORDER = ['products', 'customers', 'suppliers', 'paymentMethods', 'saleTypes', 'users', 'system'];
+const CAD_ORDER = ['products', 'customers', 'suppliers', 'locations', 'paymentMethods', 'saleTypes', 'users', 'system'];
 
 function viewCadastros() {
   const tabs = CAD_ORDER.filter(k => isAdmin() || !(k === 'users' || k === 'system')).map(k => [k, k === 'system' ? 'Backup e sistema' : SCHEMA[k].title]);
@@ -657,7 +680,7 @@ function viewCadastros() {
   const rows = sc.list().filter(x => !q || norm(sc.search(x)).includes(q)).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   return head + `<div class="row" style="justify-content:space-between;margin-bottom:14px"><input style="max-width:280px" placeholder="Buscar…" value="${esc(ui.cq || '')}" data-on="cq"><button class="btn" data-act="newRec">+ Novo ${sc.one}</button></div>
   <div class="tw"><table><thead><tr>${sc.cols.map(c => `<th class="${c[2] || ''}">${c[0]}</th>`).join('')}<th></th></tr></thead><tbody>
-  ${rows.length ? rows.map(x => `<tr class="${x.active === false ? 'muted' : ''}">${sc.cols.map(c => `<td class="${c[2] || ''}">${c[1](x)}</td>`).join('')}<td class="act"><button class="btn ghost sm" data-act="editRec" data-id="${x.id}">Editar</button> <button class="btn danger sm" data-act="delRec" data-id="${x.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="${sc.cols.length + 1}" class="empty">Nada cadastrado ainda.</td></tr>`}</tbody></table></div>`;
+  ${rows.length ? rows.map(x => `<tr class="${x.active === false ? 'muted' : ''}">${sc.cols.map(c => `<td class="${c[2] || ''}">${c[1](x)}</td>`).join('')}<td class="act">${ui.cadTab === 'customers' ? `<button class="btn sm" data-act="custHist" data-id="${x.id}">Histórico</button> ` : ''}<button class="btn ghost sm" data-act="editRec" data-id="${x.id}">Editar</button> <button class="btn danger sm" data-act="delRec" data-id="${x.id}">Excluir</button></td></tr>`).join('') : `<tr><td colspan="${sc.cols.length + 1}" class="empty">Nada cadastrado ainda.</td></tr>`}</tbody></table></div>`;
 }
 function viewSistema() {
   return `<div class="grid g2">
@@ -704,6 +727,7 @@ function usedBy(kind, id) {
   switch (kind) {
     case 'products': return db.entries.some(x => x.productId === id) || db.sales.some(s => s.items.some(i => i.productId === id)) || db.transfers.some(x => x.productId === id) || db.orders.some(x => x.productId === id);
     case 'suppliers': return db.products.some(x => x.supplierId === id) || db.entries.some(x => x.supplierId === id) || db.orders.some(x => x.supplierId === id);
+    case 'locations': return db.entries.some(x => x.locationId === id) || db.sales.some(x => x.locationId === id) || db.transfers.some(x => x.fromId === id || x.toId === id) || db.orders.some(x => x.locationId === id) || db.locations.length <= 1;
     case 'paymentMethods': return db.sales.some(x => x.paymentId === id);
     case 'saleTypes': return db.sales.some(x => x.typeId === id);
     case 'customers': return db.sales.some(x => x.customerId === id);
@@ -716,19 +740,26 @@ function usedBy(kind, id) {
    ========================================================= */
 function reportDefs() {
   const R = range(ui.per), sm = stockMap();
-  const S = db.sales.filter(s => inRange(s.date, R)).sort((a, b) => a.date.localeCompare(b.date));
+  const S = db.sales.filter(s => inRange(s.date, R) && (!ui.loc || locOf(s) === ui.loc)).sort((a, b) => a.date.localeCompare(b.date));
   return {
     estoque: ['Posição de estoque', false, () => {
-      const rows = db.products.filter(p => p.active !== false).sort((a, b) => a.name.localeCompare(b.name)).map(p => { const q = sm[p.id] || 0; return [p.sku, p.tipo, prodShort(p), sup(p.supplierId)?.name || '', q, num(p.buyPrice), num(p.sellPrice), q * num(p.buyPrice), q * num(p.sellPrice), ST[reorder(p, q).st][1]]; });
-      return { head: ['SKU', 'Tipo', 'Produto', 'Fornecedor', 'Qtd', 'Custo un.', 'Venda un.', 'Total custo', 'Total venda', 'Situação'], types: ['t', 't', 't', 't', 'i', 'm', 'm', 'm', 'm', 't'], rows, totals: ['Total', '', '', '', sum(rows, r => r[4]), '', '', sum(rows, r => r[7]), sum(rows, r => r[8]), ''] };
+      const locs = ui.loc ? db.locations.filter(l => l.id === ui.loc) : db.locations, maps = locs.map(l => stockMap(l.id));
+      const rows = db.products.filter(p => p.active !== false).sort((a, b) => a.name.localeCompare(b.name)).map(p => {
+        const qs = maps.map(m => m[p.id] || 0), q = sum(qs, x => x);
+        return [p.sku, p.tipo, prodShort(p), sup(p.supplierId)?.name || '', ...qs, ...(locs.length > 1 ? [q] : []), num(p.buyPrice), num(p.sellPrice), q * num(p.buyPrice), q * num(p.sellPrice), ST[reorder(p, stockMap()[p.id] || 0).st][1]];
+      });
+      const nq = locs.length + (locs.length > 1 ? 1 : 0), pos = 4 + nq;
+      return { head: ['SKU', 'Tipo', 'Produto', 'Fornecedor', ...locs.map(l => l.name), ...(locs.length > 1 ? ['Total'] : []), 'Custo un.', 'Venda un.', 'Total custo', 'Total venda', 'Situação'],
+        types: ['t', 't', 't', 't', ...Array(nq).fill('i'), 'm', 'm', 'm', 'm', 't'], rows,
+        totals: ['Total', '', '', '', ...Array.from({ length: nq }, (_, k) => sum(rows, r => r[4 + k])), '', '', sum(rows, r => r[pos + 2]), sum(rows, r => r[pos + 3]), ''] };
     }],
     reposicao: ['Reposição / ponto de pedido', false, () => {
       const rows = db.products.filter(p => p.active !== false).sort((a, b) => a.name.localeCompare(b.name)).map(p => { const q = sm[p.id] || 0, r = reorder(p, q); return [p.sku, prodShort(p), sup(p.supplierId)?.name || '', q, +r.avg.toFixed(2), r.lead, r.rop, r.pendQty, r.st === 'ok' ? 0 : r.suggest, ST[r.st][1]]; });
       return { head: ['SKU', 'Produto', 'Fornecedor', 'Estoque', 'Venda/dia', 'Prazo (d)', 'Pto. pedido', 'Pedido a caminho', 'Sugestão de compra', 'Situação'], types: ['t', 't', 't', 'i', 'n', 'i', 'i', 'i', 'i', 't'], rows };
     }],
     vendas: ['Vendas do período', true, () => {
-      const rows = S.map(s => [s.date, byId(db.saleTypes, s.typeId)?.name || '', cust(s.customerId)?.name || '', byId(db.paymentMethods, s.paymentId)?.name || '', saleItemsText(s), saleQty(s), s.total, saleCost(s), s.total - saleCost(s)]);
-      return { head: ['Data', 'Tipo de venda', 'Cliente', 'Pagamento', 'Itens', 'Qtd', 'Total', 'Custo', 'Lucro'], types: ['d', 't', 't', 't', 't', 'i', 'm', 'm', 'm'], rows, totals: ['Total', '', '', '', '', sum(rows, r => r[5]), sum(rows, r => r[6]), sum(rows, r => r[7]), sum(rows, r => r[8])] };
+      const rows = S.map(s => [s.date, byId(db.saleTypes, s.typeId)?.name || '', cust(s.customerId)?.name || '', byId(db.paymentMethods, s.paymentId)?.name || '', locName(locOf(s)), saleItemsText(s), saleQty(s), s.total, saleCost(s), s.total - saleCost(s)]);
+      return { head: ['Data', 'Tipo de venda', 'Cliente', 'Pagamento', 'Estoque', 'Itens', 'Qtd', 'Total', 'Custo', 'Lucro'], types: ['d', 't', 't', 't', 't', 't', 'i', 'm', 'm', 'm'], rows, totals: ['Total', '', '', '', '', '', sum(rows, r => r[6]), sum(rows, r => r[7]), sum(rows, r => r[8]), sum(rows, r => r[9])] };
     }],
     produtos: ['Vendas por produto', true, () => {
       const m = {}; for (const s of S) for (const i of s.items) { const x = m[i.productId] = m[i.productId] || [0, 0, 0]; x[0] += i.qty; x[1] += i.qty * i.price; x[2] += i.qty * i.cost; }
@@ -741,12 +772,12 @@ function reportDefs() {
       return { head: ['Fornecedor', 'Qtd vendida', 'Custo a repassar', 'Receita', 'Lucro'], types: ['t', 'i', 'm', 'm', 'm'], rows, totals: ['Total', sum(rows, r => r[1]), sum(rows, r => r[2]), sum(rows, r => r[3]), sum(rows, r => r[4])] };
     }],
     entradas: ['Entradas de estoque', true, () => {
-      const rows = db.entries.filter(e => inRange(e.date, R)).sort((a, b) => a.date.localeCompare(b.date)).map(e => [e.date, prod(e.productId)?.sku || '', prodShort(prod(e.productId)), sup(e.supplierId)?.name || '', e.kind === 'devolucao' ? 'Devolução' : 'Compra', e.qty, e.buyPrice, e.sellPrice, e.kind === 'devolucao' ? 0 : e.qty * e.buyPrice]);
-      return { head: ['Data', 'SKU', 'Produto', 'Fornecedor', 'Tipo', 'Qtd', 'Compra un.', 'Venda un.', 'Total compra'], types: ['d', 't', 't', 't', 't', 'i', 'm', 'm', 'm'], rows, totals: ['Total', '', '', '', '', sum(rows, r => r[5]), '', '', sum(rows, r => r[8])] };
+      const rows = db.entries.filter(e => inRange(e.date, R) && (!ui.loc || locOf(e) === ui.loc)).sort((a, b) => a.date.localeCompare(b.date)).map(e => [e.date, prod(e.productId)?.sku || '', prodShort(prod(e.productId)), locName(locOf(e)), sup(e.supplierId)?.name || '', e.kind === 'devolucao' ? 'Devolução' : 'Compra', e.qty, e.buyPrice, e.sellPrice, e.kind === 'devolucao' ? 0 : e.qty * e.buyPrice]);
+      return { head: ['Data', 'SKU', 'Produto', 'Estoque', 'Fornecedor', 'Tipo', 'Qtd', 'Compra un.', 'Venda un.', 'Total compra'], types: ['d', 't', 't', 't', 't', 't', 'i', 'm', 'm', 'm'], rows, totals: ['Total', '', '', '', '', '', sum(rows, r => r[6]), '', '', sum(rows, r => r[9])] };
     }],
     transferencias: ['Transferências', true, () => {
-      const rows = db.transfers.filter(t => inRange(t.date, R)).sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, prod(t.productId)?.sku || '', prodShort(prod(t.productId)), t.qty, t.destino, t.note || '']);
-      return { head: ['Data', 'SKU', 'Produto', 'Qtd', 'Destino', 'Obs.'], types: ['d', 't', 't', 'i', 't', 't'], rows };
+      const rows = db.transfers.filter(t => inRange(t.date, R) && (!ui.loc || (t.fromId || defLoc()) === ui.loc || t.toId === ui.loc)).sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, prod(t.productId)?.sku || '', prodShort(prod(t.productId)), t.qty, locName(t.fromId || defLoc()), t.kind === 'baixa' ? 'Baixa (estoque excluído)' : (t.toId ? locName(t.toId) : (t.destino || 'Fora dos estoques')), t.note || '']);
+      return { head: ['Data', 'SKU', 'Produto', 'Qtd', 'De', 'Para', 'Obs.'], types: ['d', 't', 't', 'i', 't', 't', 't'], rows };
     }],
     clientes: ['Clientes', false, () => {
       const rows = db.customers.sort((a, b) => a.name.localeCompare(b.name)).map(c => { const ss = db.sales.filter(s => s.customerId === c.id); return [c.name, c.phone, c.birthday ? fdate(c.birthday).slice(0, 5) : '', ss.length, sum(ss, s => s.total), ss.map(s => s.date).sort().pop() || '']; });
@@ -763,7 +794,7 @@ function viewRelatorios() {
   const [title, hasPer, build] = defs[ui.rel], r = build();
   return `<div class="page-head"><div><h1>Relatórios</h1><p>Imprima ou baixe em planilha (abre no Excel / Google Sheets).</p></div></div>
   <div class="tabs">${Object.entries(defs).map(([k, d]) => `<button data-act="rel" data-k="${k}" class="${ui.rel === k ? 'on' : ''}">${d[0]}</button>`).join('')}</div>
-  <div class="row" style="justify-content:space-between;margin-bottom:14px">${hasPer ? periodSel() : '<span></span>'}<div class="row no-print"><button class="btn ghost" data-act="csv">Baixar planilha</button><button class="btn" data-act="print">Imprimir</button></div></div>
+  <div class="row" style="justify-content:space-between;margin-bottom:14px"><div class="row">${['clientes', 'reposicao'].includes(ui.rel) ? '' : locSel()}${hasPer ? periodSel() : ''}</div><div class="row no-print"><button class="btn ghost" data-act="csv">Baixar planilha</button><button class="btn" data-act="print">Imprimir</button></div></div>
   <div class="card"><div class="print-title"><img src="logo.svg" alt=""><h2>${title}</h2><div>${hasPer ? perLabel() + ' · ' : ''}emitido em ${fdate(today())}</div></div>
   <div class="tw"><table><thead><tr>${r.head.map((h, i) => `<th class="${'min'.includes(r.types[i]) && r.types[i] !== 't' ? 'num' : ''}">${h}</th>`).join('')}</tr></thead><tbody>
   ${r.rows.length ? r.rows.map(row => `<tr>${row.map((v, i) => `<td class="${r.types[i] !== 't' && r.types[i] !== 'd' ? 'num' : ''}">${fmtCell(v, r.types[i])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${r.head.length}" class="empty">Sem dados.</td></tr>`}</tbody>
@@ -788,6 +819,36 @@ const ACT = {
   menu() { $('#side').classList.toggle('open'); },
   closeMenu() { const s = $('#side'); if (s) s.classList.remove('open'); },
   closeModal,
+  custHist(el) {
+    const c = cust(el.dataset.id); if (!c) return;
+    const S = db.sales.filter(s => s.customerId === c.id).sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0));
+    const total = sum(S, s => s.total), lucro = total - sum(S, saleCost), qtd = sum(S, saleQty);
+    const pm = {}; for (const s of S) for (const i of s.items) pm[i.productId] = (pm[i.productId] || 0) + i.qty;
+    const fav = Object.entries(pm).sort((a, b) => b[1] - a[1])[0];
+    const wa = digits(c.phone);
+    openModal(`<div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2 style="margin:0">${esc(c.name)}</h2>
+      <div class="muted">${esc(c.phone)}${c.birthday ? ' · aniversário ' + fdate(c.birthday).slice(0, 5) : ''}${c.note ? ' · ' + esc(c.note) : ''}</div></div>
+      <div class="row">${wa ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${wa.length <= 11 ? '55' : ''}${wa}">WhatsApp</a>` : ''}<button class="btn ghost sm" data-act="closeModal">Fechar</button></div></div>
+      <div class="grid g4" style="margin:16px 0;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        <div class="kpi"><div class="l">Compras</div><div class="v">${S.length}</div><div class="s">${qtd} peça(s)</div></div>
+        <div class="kpi gold"><div class="l">Total gasto</div><div class="v">${brl(total)}</div></div>
+        <div class="kpi"><div class="l">Ticket médio</div><div class="v">${brl(S.length ? total / S.length : 0)}</div></div>
+        <div class="kpi"><div class="l">Última compra</div><div class="v" style="font-size:19px">${S.length ? fdate(S[0].date) : '—'}</div><div class="s">${fav ? 'mais comprou: ' + esc(prodShort(prod(fav[0]))) : ''}</div></div></div>
+      <div class="tw"><table><thead><tr><th>Data</th><th>Itens</th><th>Tipo</th><th>Pagamento</th><th class="num">Total</th></tr></thead><tbody>
+      ${S.length ? S.map(s => `<tr><td>${fdate(s.date)}</td><td>${esc(saleItemsText(s))}</td><td>${esc(byId(db.saleTypes, s.typeId)?.name || '—')}</td><td>${esc(byId(db.paymentMethods, s.paymentId)?.name || '—')}</td><td class="num"><b>${brl(s.total)}</b></td></tr>`).join('') : `<tr><td colspan="5" class="empty">Este cliente ainda não comprou.</td></tr>`}</tbody></table></div>
+      ${S.length ? `<div class="muted sm" style="margin-top:8px">Lucro bruto com este cliente: ${brl(lucro)}</div>` : ''}`);
+    $('#modal .box').style.maxWidth = '860px';
+  },
+  loc(el) { ui.loc = el.dataset.k; rerender(); },
+  zeroStock(el) {
+    const p = prod(el.dataset.pid);
+    const locs = (ui.loc ? db.locations.filter(l => l.id === ui.loc) : db.locations).map(l => [l, stockMap(l.id)[p.id] || 0]).filter(x => x[1] > 0);
+    if (!locs.length) return;
+    const txt = locs.map(([l, q]) => `${q} un em ${l.name}`).join(' e ');
+    if (!confirm(`Excluir o estoque de "${prodShort(p)}"?\n\nVai zerar: ${txt}.\nFica registrado como baixa na lista de transferências (dá para desfazer excluindo a baixa lá).`)) return;
+    for (const [l, q] of locs) db.transfers.push({ id: uid(), at: Date.now(), date: today(), productId: p.id, qty: q, fromId: l.id, toId: '', destino: 'Baixa de estoque', kind: 'baixa', note: 'Estoque excluído', userId: me.id });
+    save(); rerender(); toast('Estoque excluído (baixa registrada).');
+  },
   closeModal2,
   quickAdd(el) { quickAdd(el.dataset.kind, el.closest('form'), el.dataset.field); },
   clearDf() { ui.df = {}; rerender(); },
@@ -806,10 +867,10 @@ const ACT = {
   addLine() { addLine(); },
   rmLine(el) { if ($$('.line').length > 1) { el.closest('.line').remove(); calcSale(); } },
   newOrder(el) { orderModal(el.dataset.pid); },
-  recvOrder(el) { const o = db.orders.find(o => o.id === el.dataset.id); ui.prefill = { productId: o.productId, qty: o.qty, orderId: o.id }; go('entrada'); },
+  recvOrder(el) { const o = db.orders.find(o => o.id === el.dataset.id); ui.prefill = { productId: o.productId, qty: o.qty, orderId: o.id, locationId: o.locationId }; go('entrada'); },
   cancelOrder(el) { if (confirm('Cancelar este pedido?')) { db.orders.find(o => o.id === el.dataset.id).status = 'cancelado'; save(); rerender(); } },
   delEntry(el) {
-    const e = db.entries.find(x => x.id === el.dataset.id), sm = stockMap();
+    const e = db.entries.find(x => x.id === el.dataset.id), sm = stockMap(locOf(db.entries.find(x => x.id === el.dataset.id)));
     if ((sm[e.productId] || 0) - e.qty < 0 && !confirm('Excluir esta entrada deixa o estoque do produto negativo. Excluir mesmo assim?')) return;
     if (!confirm('Excluir esta entrada?')) return;
     db.entries = db.entries.filter(x => x.id !== e.id); save(); rerender();
@@ -868,34 +929,38 @@ const FORM = {
     closeModal();
   },
   entry(f, ev) {
-    const fields = ['date', 'kind', 'productId', 'qty', 'buyPrice', 'sellPrice', 'supplierId', 'orderId', 'note'].map(n => ({ name: n, type: ['qty', 'buyPrice', 'sellPrice'].includes(n) ? 'number' : 'text' }));
+    const fields = ['date', 'kind', 'locationId', 'productId', 'qty', 'buyPrice', 'sellPrice', 'supplierId', 'orderId', 'note'].map(n => ({ name: n, type: ['qty', 'buyPrice', 'sellPrice'].includes(n) ? 'number' : 'text' }));
     const d = formData(f, fields);
     if (!d.productId) return toast('Escolha o produto.', true);
     if (!(d.qty >= 1)) return toast('Informe a quantidade.', true);
     if (d.buyPrice === '' || d.sellPrice === '') return toast('Informe valor de compra e de venda.', true);
-    db.entries.push({ id: uid(), at: Date.now(), date: d.date, kind: d.kind, productId: d.productId, qty: Math.round(d.qty), buyPrice: d.buyPrice, sellPrice: d.sellPrice, supplierId: d.supplierId, note: d.note, userId: me.id });
+    ui.lastLoc = d.locationId;
+    db.entries.push({ id: uid(), at: Date.now(), date: d.date, kind: d.kind, locationId: d.locationId, productId: d.productId, qty: Math.round(d.qty), buyPrice: d.buyPrice, sellPrice: d.sellPrice, supplierId: d.supplierId, note: d.note, userId: me.id });
     const p = prod(d.productId); p.buyPrice = d.buyPrice; p.sellPrice = d.sellPrice; if (d.supplierId) p.supplierId = d.supplierId;
     if (d.orderId) { const o = db.orders.find(o => o.id === d.orderId); if (o) o.status = 'recebido'; }
     save(); toast('Entrada registrada.');
     if (ev.submitter && ev.submitter.dataset.again) { ui.prefill = null; rerender(); } else go('estoque');
   },
   transfer(f) {
-    const d = formData(f, ['date', 'productId', 'qty', 'destino', 'note'].map(n => ({ name: n, type: n === 'qty' ? 'number' : 'text' })));
-    if (!d.productId || !(d.qty >= 1) || !d.destino) return toast('Preencha produto, quantidade e destino.', true);
-    const have = stockMap()[d.productId] || 0;
-    if (d.qty > have) return toast(`Estoque insuficiente: só há ${have} un.`, true);
-    db.transfers.push({ id: uid(), at: Date.now(), date: d.date, productId: d.productId, qty: Math.round(d.qty), destino: d.destino, note: d.note, userId: me.id });
+    const d = formData(f, ['date', 'fromId', 'toId', 'productId', 'qty', 'destino', 'note'].map(n => ({ name: n, type: n === 'qty' ? 'number' : 'text' })));
+    if (!d.productId || !(d.qty >= 1)) return toast('Preencha produto e quantidade.', true);
+    if (!d.toId && !d.destino) return toast('Escolha o estoque de destino ou informe o destino externo.', true);
+    if (d.toId && d.toId === d.fromId) return toast('Origem e destino são o mesmo estoque.', true);
+    const have = stockMap(d.fromId)[d.productId] || 0;
+    if (d.qty > have) return toast(`Estoque insuficiente em ${locName(d.fromId)}: só há ${have} un.`, true);
+    ui.lastLoc = d.fromId;
+    db.transfers.push({ id: uid(), at: Date.now(), date: d.date, productId: d.productId, qty: Math.round(d.qty), fromId: d.fromId, toId: d.toId, destino: d.destino, note: d.note, userId: me.id });
     save(); rerender(); toast('Transferência registrada.');
   },
   sale(f) {
     const lines = $$('.line', f).map(l => ({ productId: l.querySelector('[name=productId]').value, qty: Math.round(num(l.querySelector('[name=qty]').value)), price: num(l.querySelector('[name=price]').value) })).filter(l => l.productId);
     if (!lines.length) return toast('Adicione pelo menos um produto.', true);
-    const sm = stockMap(), need = {};
+    const locId = f.elements.locationId.value, sm = stockMap(locId), need = {};
     for (const l of lines) {
       if (l.qty < 1) return toast('Quantidade inválida.', true);
       need[l.productId] = (need[l.productId] || 0) + l.qty;
     }
-    for (const [pid, q] of Object.entries(need)) if (q > (sm[pid] || 0)) return toast(`Estoque insuficiente de ${prodShort(prod(pid))}: há ${sm[pid] || 0} un.`, true);
+    for (const [pid, q] of Object.entries(need)) if (q > (sm[pid] || 0)) return toast(`Estoque insuficiente de ${prodShort(prod(pid))} em ${locName(locId)}: há ${sm[pid] || 0} un.`, true);
     let c = resolveCustomer($('#custq').value), newC = null;
     if (!c) {
       if (!$('#custq').value.trim()) return toast('Informe o cliente.', true);
@@ -907,7 +972,8 @@ const FORM = {
     }
     const items = lines.map(l => ({ productId: l.productId, qty: l.qty, price: l.price, cost: num(prod(l.productId).buyPrice) }));
     if (newC) db.customers.push(newC);
-    db.sales.push({ id: uid(), at: Date.now(), date: f.elements.date.value, typeId: f.elements.typeId.value, paymentId: f.elements.paymentId.value, customerId: c.id, items, total: sum(items, i => i.qty * i.price), userId: me.id, userName: me.name });
+    ui.lastLoc = locId;
+    db.sales.push({ id: uid(), at: Date.now(), date: f.elements.date.value, locationId: locId, typeId: f.elements.typeId.value, paymentId: f.elements.paymentId.value, customerId: c.id, items, total: sum(items, i => i.qty * i.price), userId: me.id, userName: me.name });
     save(); rerender(); toast(`Venda registrada${newC ? ' e cliente cadastrado' : ''}.`);
   }
 };
@@ -919,6 +985,11 @@ const ON = {
   vq(el) { ui.vq = el.value; keepFocus(el); }, vtype(el) { ui.vtype = el.value; rerender(); }, vpay(el) { ui.vpay = el.value; rerender(); },
   cq(el) { ui.cq = el.value; keepFocus(el); },
   df(el) { ui.df = ui.df || {}; ui.df[el.dataset.k] = el.value; if (el.dataset.k === 'tipo') ui.df.productId = ''; rerender(); },
+  saleLoc() { $('#lines').innerHTML = ''; addLine(); calcSale(); },
+  transFrom(el) {
+    const sel = el.form.elements.productId, blank = sel.querySelector('option[value=""]');
+    sel.innerHTML = (blank ? blank.outerHTML : '') + prodOpts(true, null, el.value).map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('');
+  },
   skuPrev(el) { const f = el.form; if (f && f.elements.sku) f.elements.sku.value = el.value.trim() ? skuFor(el.value) : ''; },
   touch(el) { el.dataset.t = 1; },
   custq() { updateCustBox(); },
