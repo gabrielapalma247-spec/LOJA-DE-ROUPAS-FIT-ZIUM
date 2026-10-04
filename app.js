@@ -234,7 +234,7 @@ function render() {
       <div class="who">${cloudOn ? `<div id="sync" class="muted sm" style="margin-bottom:10px">${SYNC_TXT[syncState]}</div>` : ''}<b>${esc(me.name)}</b>${me.role === 'admin' ? 'Administrador' : 'Vendedor(a)'}
         <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-act="chpw">Trocar senha</button><button class="btn ghost sm" data-act="logout">Sair</button></div></div>
     </aside>
-    <main class="main"><button class="btn ghost sm menu-btn no-print" data-act="menu" style="margin-bottom:14px">☰ Menu</button><div id="view">${ROUTES[r][1]()}</div></main></div>`;
+    <main class="main"><div class="row no-print" style="margin-bottom:14px"><button class="btn ghost sm menu-btn" data-act="menu">☰ Menu</button>${r !== 'dashboard' ? '<button class="btn ghost sm" data-act="back">← Voltar</button>' : ''}</div><div id="view">${ROUTES[r][1]()}</div></main></div>`;
   afterRender(r);
 }
 function afterRender(r) {
@@ -294,22 +294,39 @@ const prodOpts = (onlyStock, cur) => {
    DASHBOARD
    ========================================================= */
 function viewDashboard() {
-  const R = range(ui.per);
-  const S = db.sales.filter(s => inRange(s.date, R));
-  const E = db.entries.filter(e => e.kind !== 'devolucao' && inRange(e.date, R));
+  const R = range(ui.per), F = ui.df || {};
+  const pOk = p => (!F.tipo || p.tipo === F.tipo) && (!F.productId || p.id === F.productId) && (!F.supplierId || p.supplierId === F.supplierId);
+  const fSales = list => list.filter(s => (!F.typeId || s.typeId === F.typeId) && (!F.paymentId || s.paymentId === F.paymentId) && (!F.customerId || s.customerId === F.customerId) && (!F.userId || s.userId === F.userId))
+    .map(s => { const items = s.items.filter(i => { const p = prod(i.productId); return p && pOk(p); }); return { ...s, items, total: sum(items, i => i.qty * i.price) }; }).filter(s => s.items.length);
+  const eOk = e => { const p = prod(e.productId); return !!p && pOk(p); };
+  const PF = db.products.filter(pOk);
+  const S = fSales(db.sales.filter(s => inRange(s.date, R)));
+  const E = db.entries.filter(e => e.kind !== 'devolucao' && inRange(e.date, R) && eOk(e));
+  const nF = Object.values(F).filter(Boolean).length;
+  const fsel = (k, label, opts) => `<div><label>${label}</label><select data-on="df" data-k="${k}"><option value="">Todos</option>${opts.map(o => `<option value="${esc(o.v)}" ${F[k] === o.v ? 'selected' : ''}>${esc(o.t)}</option>`).join('')}</select></div>`;
+  const filtros = `<div class="card no-print" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;margin-bottom:12px"><h3>Filtros${nF ? ` · ${nF} ativo(s)` : ''}</h3>${nF ? '<button class="btn ghost sm" data-act="clearDf">Limpar filtros</button>' : ''}</div>
+    <div class="fgrid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
+    ${fsel('typeId', 'Tipo de venda', db.saleTypes.map(x => ({ v: x.id, t: x.name })))}
+    ${fsel('paymentId', 'Forma de pagamento', db.paymentMethods.map(x => ({ v: x.id, t: x.name })))}
+    ${fsel('tipo', 'Tipo de produto', [...new Set(db.products.map(p => p.tipo))].sort().map(t => ({ v: t, t })))}
+    ${fsel('productId', 'Produto', db.products.filter(p => !F.tipo || p.tipo === F.tipo).sort((a, b) => a.name.localeCompare(b.name)).map(p => ({ v: p.id, t: prodLabel(p) })))}
+    ${fsel('supplierId', 'Fornecedor', db.suppliers.map(x => ({ v: x.id, t: x.name })))}
+    ${fsel('customerId', 'Cliente', db.customers.slice().sort((a, b) => a.name.localeCompare(b.name)).map(x => ({ v: x.id, t: x.name })))}
+    ${fsel('userId', 'Vendedor(a)', db.users.map(x => ({ v: x.id, t: x.name })))}</div>
+    ${F.typeId || F.paymentId || F.customerId || F.userId ? '<div class="muted sm" style="margin-top:10px">Filtros de venda (tipo, pagamento, cliente, vendedor) valem só para as vendas; compras e estoque seguem os filtros de produto/fornecedor.</div>' : ''}</div>`;
   const receita = sum(S, s => s.total), custo = sum(S, saleCost), compras = sum(E, e => e.qty * e.buyPrice);
   const lucro = receita - custo, saldo = receita - compras, margem = receita ? lucro / receita * 100 : 0;
   const sm = stockMap();
-  const stCusto = sum(db.products, p => Math.max(0, sm[p.id] || 0) * num(p.buyPrice));
-  const stVenda = sum(db.products, p => Math.max(0, sm[p.id] || 0) * num(p.sellPrice));
-  const stQtd = sum(db.products, p => Math.max(0, sm[p.id] || 0));
-  const al = alertList();
+  const stCusto = sum(PF, p => Math.max(0, sm[p.id] || 0) * num(p.buyPrice));
+  const stVenda = sum(PF, p => Math.max(0, sm[p.id] || 0) * num(p.sellPrice));
+  const stQtd = sum(PF, p => Math.max(0, sm[p.id] || 0));
+  const al = alertList().filter(x => pOk(x.p));
 
   // últimos 6 meses
   const n = new Date(), months = [];
   for (let i = 5; i >= 0; i--) { const d = new Date(n.getFullYear(), n.getMonth() - i, 1); months.push({ k: `${d.getFullYear()}-${pad(d.getMonth() + 1)}`, l: `${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, v: 0, c: 0 }); }
-  for (const s of db.sales) { const m = months.find(x => x.k === s.date.slice(0, 7)); if (m) m.v += s.total; }
-  for (const e of db.entries) if (e.kind !== 'devolucao') { const m = months.find(x => x.k === e.date.slice(0, 7)); if (m) m.c += e.qty * e.buyPrice; }
+  for (const s of fSales(db.sales)) { const m = months.find(x => x.k === s.date.slice(0, 7)); if (m) m.v += s.total; }
+  for (const e of db.entries) if (e.kind !== 'devolucao' && eOk(e)) { const m = months.find(x => x.k === e.date.slice(0, 7)); if (m) m.c += e.qty * e.buyPrice; }
 
   const group = (keyFn, labelFn) => {
     const m = {}; for (const s of S) { const k = keyFn(s); m[k] = (m[k] || 0) + s.total; }
@@ -324,6 +341,7 @@ function viewDashboard() {
   const bdays = db.customers.filter(c => c.birthday && +c.birthday.slice(5, 7) === mes).sort((a, b) => a.birthday.slice(8) - b.birthday.slice(8));
 
   return `<div class="page-head"><div><h1>Dashboard</h1><p>${perLabel()}</p></div>${periodSel()}</div>
+  ${filtros}
   <div class="grid g4">
     <div class="kpi gold"><div class="l">Entrou (vendas)</div><div class="v">${brl(receita)}</div><div class="s">${S.length} venda(s) · ticket ${brl(S.length ? receita / S.length : 0)}</div></div>
     <div class="kpi"><div class="l">Saiu (compras)</div><div class="v">${brl(compras)}</div><div class="s">${E.length} entrada(s) de mercadoria</div></div>
@@ -331,7 +349,7 @@ function viewDashboard() {
     <div class="kpi ${lucro >= 0 ? 'ok' : 'bad'}"><div class="l">Lucro bruto</div><div class="v">${brl(lucro)}</div><div class="s">margem ${margem.toFixed(1).replace('.', ',')}% · custo vendido ${brl(custo)}</div></div>
   </div>
   <div class="grid g4" style="margin-top:14px">
-    <div class="kpi"><div class="l">Estoque (unidades)</div><div class="v">${int(stQtd)}</div><div class="s">${db.products.filter(p => p.active !== false).length} produtos ativos</div></div>
+    <div class="kpi"><div class="l">Estoque (unidades)</div><div class="v">${int(stQtd)}</div><div class="s">${PF.filter(p => p.active !== false).length} produtos ativos</div></div>
     <div class="kpi"><div class="l">Estoque a custo</div><div class="v">${brl(stCusto)}</div><div class="s">dinheiro parado em mercadoria</div></div>
     <div class="kpi"><div class="l">Estoque a preço de venda</div><div class="v">${brl(stVenda)}</div><div class="s">lucro potencial ${brl(stVenda - stCusto)}</div></div>
     <div class="kpi ${al.filter(x => x.r.st !== 'caminho').length ? 'bad' : ''}"><div class="l">Alertas de reposição</div><div class="v">${al.length}</div><div class="s">${needOrder().length} pedir/atrasado · ${al.filter(x => x.r.st === 'caminho').length} a caminho</div></div>
@@ -742,6 +760,13 @@ const ACT = {
   menu() { $('#side').classList.toggle('open'); },
   closeMenu() { const s = $('#side'); if (s) s.classList.remove('open'); },
   closeModal,
+  clearDf() { ui.df = {}; rerender(); },
+  back() {
+    navStack.pop();
+    const prev = navStack[navStack.length - 1] || 'dashboard';
+    if (location.hash === '#/' + prev) return render();
+    goingBack = true; go(prev);
+  },
   per(el) { ui.per = el.dataset.k; rerender(); },
   saidaMode(el) { ui.saidaMode = el.dataset.k; rerender(); },
   cadTab(el) { ui.cadTab = el.dataset.k; ui.cq = ''; rerender(); },
@@ -857,6 +882,7 @@ const ON = {
   estq(el) { ui.estq = el.value; keepFocus(el); }, onlyAlert(el) { ui.onlyAlert = el.checked; rerender(); }, showInactive(el) { ui.showInactive = el.checked; rerender(); },
   vq(el) { ui.vq = el.value; keepFocus(el); }, vtype(el) { ui.vtype = el.value; rerender(); }, vpay(el) { ui.vpay = el.value; rerender(); },
   cq(el) { ui.cq = el.value; keepFocus(el); },
+  df(el) { ui.df = ui.df || {}; ui.df[el.dataset.k] = el.value; if (el.dataset.k === 'tipo') ui.df.productId = ''; rerender(); },
   touch(el) { el.dataset.t = 1; },
   custq() { updateCustBox(); },
   saleCalc() { calcSale(); },
@@ -914,7 +940,13 @@ const onEvt = e => { const el = e.target.closest('[data-on]'); if (el && ON[el.d
 document.addEventListener('input', e => { const t = e.target; if (t.type === 'checkbox' || t.type === 'file' || t.tagName === 'SELECT' || t.type === 'date') return; onEvt(e); });
 document.addEventListener('change', e => { const t = e.target; if (t.type === 'checkbox' || t.type === 'file' || t.tagName === 'SELECT' || t.type === 'date') onEvt(e); else if (t.dataset && t.dataset.on === 'custq') onEvt(e); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
-window.addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
+/* pilha de navegação para o botão Voltar */
+const navStack = []; let goingBack = false;
+function trackNav() {
+  if (goingBack) { goingBack = false; return; }
+  const r = curRoute(); if (navStack[navStack.length - 1] !== r) navStack.push(r);
+}
+window.addEventListener('hashchange', () => { trackNav(); render(); scrollTo(0, 0); });
 window.addEventListener('beforeprint', () => document.title = 'Zium Fitness · Relatório');
 
 /* ---------- boot ---------- */
@@ -938,6 +970,7 @@ setInterval(pullIfChanged, 60000);
     }
   }
   await ensureAdmin();
+  trackNav();
   const sid = localStorage.getItem(SES); me = db.users.find(u => u.id === sid && u.active !== false) || null;
   render();
 })();
