@@ -21,3 +21,15 @@ Primeiro acesso: usuário `admin`, senha `zium123` (troque em "Trocar senha").
 - Se alguém mudar o Code.gs depois, faça **Implantar → Gerenciar implantações → editar → nova versão**.
 - Sem `url`/`token` no `config.js`, o sistema funciona só no navegador (modo local).
 - O token fica visível no código do site e o login roda no navegador: é uma trava de uso, não segurança forte. Não compartilhe o link do site. Para proteger de verdade, ative *Password Protection* no Vercel.
+
+
+## Novidades desta versão
+- **Duas empresas** (Natal e Interior): troque no menu. "Todas" mostra os números juntos, só para consulta; para lançar ou cadastrar, escolha uma empresa.
+- **Despesas operacionais** (frete, embalagens, tráfego pago, gasolina, materiais de escritório e outras categorias que você criar).
+- **Etiquetas** (branca, logo em preto, descrição, tamanho e valor) ao dar entrada ou pelo botão Etiquetas.
+- Datas dos formulários começam **em branco**.
+
+## Atualizando o Apps Script (obrigatório nesta versão)
+1. Abra o Apps Script da planilha e substitua tudo pelo conteúdo de `google-sheets/Code.gs`.
+2. **Implantar → Gerenciar implantações → editar (lápis) → Versão: Nova versão → Implantar.**
+3. Só depois publique o site. Sem isso o sistema mostra o aviso "Falta atualizar o Apps Script" e não abre (para não perder dados).

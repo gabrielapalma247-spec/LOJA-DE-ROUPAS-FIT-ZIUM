@@ -1,53 +1,55 @@
 /**
- * Zium Fitness · banco de dados em planilha Google.
- * Cada tabela do sistema vira uma aba. A coluna "_json" é a fonte de verdade:
+ * Zium Fitness · banco de dados em planilha Google (versão 2).
+ * Cada tabela do sistema vira uma aba (criada sozinha). A coluna "_json" é a fonte de verdade:
  * as outras colunas são só para você ler/filtrar. Para alterar dados, use o sistema.
+ * Esta versão aceita qualquer tabela nova que o sistema criar (empresas, despesas etc.).
  */
-const TOKEN = 'iUgjZhuG-pnM8M8UQAV31MOxZicO5ooO';   // invente uma senha longa e repita em config.js
-const COLS = ['users', 'paymentMethods', 'saleTypes', 'suppliers', 'products', 'customers', 'entries', 'sales', 'transfers', 'orders', 'locations'];
+const TOKEN = 'iUgjZhuG-pnM8M8UQAV31MOxZicO5ooO';
+const API = 2;
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(25000);
   try {
     const req = JSON.parse(e.postData.contents);
-    if (req.token !== TOKEN) return out_({ ok: false, error: 'token' });
+    if (req.token !== TOKEN) return out_({ ok: false, error: 'token', api: API });
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const props = PropertiesService.getScriptProperties();
     const rev = props.getProperty('REV') || '0';
-    if (req.action === 'load') return out_({ ok: true, rev: rev, data: read_(ss) });
+    if (req.action === 'load') return out_({ ok: true, api: API, rev: rev, data: read_(ss) });
     if (req.action === 'save') {
-      if (req.baseRev !== rev && rev !== '0') return out_({ ok: false, error: 'conflict', rev: rev, data: read_(ss) });
+      if (req.baseRev !== rev && rev !== '0') return out_({ ok: false, api: API, error: 'conflict', rev: rev, data: read_(ss) });
       write_(ss, req.data);
       const nr = String(Date.now());
       props.setProperty('REV', nr);
-      return out_({ ok: true, rev: nr });
+      return out_({ ok: true, api: API, rev: nr });
     }
-    return out_({ ok: false, error: 'acao' });
+    return out_({ ok: false, api: API, error: 'acao' });
   } catch (err) {
-    return out_({ ok: false, error: String(err) });
+    return out_({ ok: false, api: API, error: String(err) });
   } finally { lock.releaseLock(); }
 }
-function doGet() { return out_({ ok: true, msg: 'Zium Fitness API no ar' }); }
+function doGet() { return out_({ ok: true, api: API, msg: 'Zium Fitness API no ar' }); }
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function read_(ss) {
   const d = {};
-  COLS.forEach(function (c) {
-    d[c] = [];
-    const sh = ss.getSheetByName(c);
-    if (!sh || sh.getLastRow() < 2) return;
+  ss.getSheets().forEach(function (sh) {
+    if (sh.getLastRow() < 1 || sh.getLastColumn() < 1) return;
     const hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
     const jc = hdr.indexOf('_json');
     if (jc < 0) return;
-    sh.getRange(2, jc + 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) { if (r[0]) d[c].push(JSON.parse(r[0])); });
+    const rows = [];
+    if (sh.getLastRow() >= 2) sh.getRange(2, jc + 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) { if (r[0]) rows.push(JSON.parse(r[0])); });
+    d[sh.getName()] = rows;
   });
   return d;
 }
 
 function write_(ss, data) {
-  COLS.forEach(function (c) {
-    const rows = data[c] || [];
+  Object.keys(data).forEach(function (c) {
+    const rows = data[c];
+    if (!Array.isArray(rows)) return;
     const sh = ss.getSheetByName(c) || ss.insertSheet(c);
     sh.clear();
     const keys = [];
