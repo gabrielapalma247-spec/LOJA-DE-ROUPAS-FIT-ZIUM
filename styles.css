@@ -187,3 +187,23 @@ tfoot td{font-weight:700;background:var(--surface2)}
 
 .acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:200px;margin-left:auto}
 td.act{white-space:normal}
+
+/* ---- etiqueta com código de barras (modelo tag) ---- */
+.lbl-barbox{display:flex;flex-direction:column;align-items:center;margin:0 auto}
+.lbl-bar{display:block;max-width:100%}
+.lbl-code{font-size:5.5pt;letter-spacing:.06em;color:#000;line-height:1.1;margin-top:.3mm}
+.lbl-foot{text-align:center;color:#222;font-size:5.5pt;line-height:1.1;letter-spacing:.03em}
+.lbl.wb .lbl-name{text-transform:uppercase;letter-spacing:.01em}
+.f60x40.wb{padding:2.2mm 3mm 1.8mm}
+.f60x40.wb .lbl-logo{height:6mm}
+.f60x40.wb .lbl-name{font-size:8pt;-webkit-line-clamp:2}
+.f60x40.wb .lbl-code{font-size:6.5pt}
+.f60x40.wb .lbl-size{font-size:9.5pt}
+.f60x40.wb .lbl-price{font-size:16pt}
+.f60x40.wb .lbl-foot{font-size:6pt}
+.f50x30.wb,.fa4.wb{padding:1.5mm 2mm 1.2mm}
+.f50x30.wb .lbl-logo,.fa4.wb .lbl-logo{height:4.2mm}
+.f50x30.wb .lbl-name,.fa4.wb .lbl-name{font-size:6.5pt}
+.f50x30.wb .lbl-size,.fa4.wb .lbl-size{font-size:7.5pt;padding:.1mm .8mm}
+.f50x30.wb .lbl-price,.fa4.wb .lbl-price{font-size:11.5pt}
+.f50x30.wb .lbl-foot,.fa4.wb .lbl-foot{font-size:5pt}

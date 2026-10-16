@@ -689,33 +689,60 @@ function viewVendas() {
 /* =========================================================
    ETIQUETAS (branca, logo em preto, descrição, tamanho e valor)
    ========================================================= */
-const LBL_FORMATS = { '50x30': ['Rolo 50 × 30 mm', 50, 30], '60x40': ['Rolo 60 × 40 mm', 60, 40], a4: ['Folha A4 (3 colunas · 66 × 34 mm)', 66, 34] };
-function labelHTML(p, price, fmt) {
-  const sub = [p.color, p.tipo].filter(Boolean).join(' · ');
-  return `<div class="lbl f${fmt}"><img class="lbl-logo" src="logo-black.svg" alt="Zium Fitness"><div class="lbl-name">${esc(p.name)}</div><div class="lbl-sub">${esc(sub)}</div>
-    <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div><div class="lbl-sku">${esc(p.sku)}</div></div>`;
+const LBL_FORMATS = { '60x40': ['Rolo 60 × 40 mm', 60, 40], '50x30': ['Rolo 50 × 30 mm', 50, 30], a4: ['Folha A4 (3 colunas · 66 × 34 mm)', 66, 34] };
+
+/* Código de barras Code 128 (padrão que qualquer leitor lê). Padrões: largura das barras/espaços de cada símbolo. */
+const C128 = ['212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213', '221312', '231212', '112232', '122132', '122231', '113222', '123122', '123221', '223211', '221132', '221231', '213212', '223112', '312131', '311222', '321122', '321221', '312212', '322112', '322211', '212123', '212321', '232121', '111323', '131123', '131321', '112313', '132113', '132311', '211313', '231113', '231311', '112133', '112331', '132131', '113123', '113321', '133121', '313121', '211331', '231131', '213113', '213311', '213131', '311123', '311321', '331121', '312113', '312311', '332111', '314111', '221411', '431111', '111224', '111422', '121124', '121421', '141122', '141221', '112214', '112412', '122114', '122411', '142112', '142211', '241211', '221114', '413111', '241112', '134111', '111242', '121142', '121241', '114212', '124112', '124211', '411212', '421112', '421211', '212141', '214121', '412121', '111143', '111341', '131141', '114113', '114311', '411113', '411311', '113141', '114131', '311141', '411131', '211412', '211214', '211232'];
+function code128(text) {
+  const codes = [104]; let chk = 104, n = 0;
+  for (const ch of String(text)) { const v = ch.charCodeAt(0) - 32; if (v < 0 || v > 95) continue; n++; codes.push(v); chk += v * n; }
+  codes.push(chk % 103);
+  let w = codes.map(c => C128[c]).join('') + '2331112';
+  return w.split('').map(Number);
 }
+/* SVG do código de barras: cada módulo tem 0,25 mm (2 pontos numa impressora de 203 dpi) */
+function barcodeSVG(text, hmm) {
+  const widths = code128(text), Q = 10, total = widths.reduce((a, b) => a + b, 0) + Q * 2;
+  let x = Q, rects = '';
+  widths.forEach((w, k) => { if (k % 2 === 0) rects += `<rect x="${x}" y="0" width="${w}" height="1"/>`; x += w; });
+  return `<svg class="lbl-bar" viewBox="0 0 ${total} 1" preserveAspectRatio="none" shape-rendering="crispEdges" style="width:${(total * 0.25).toFixed(1)}mm;height:${hmm}mm">${rects}</svg>`;
+}
+const lblGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } };
+function labelHTML(p, price, fmt, o = {}) {
+  const bar = o.bar !== false, foot = (o.foot || '').trim();
+  const desc = [p.name, p.color].filter(Boolean).join(' · ');
+  const bh = fmt === '60x40' ? 9 : 6.5;
+  return `<div class="lbl f${fmt}${bar ? ' wb' : ''}"><img class="lbl-logo" src="logo-black.svg" alt="Zium Fitness">
+    <div class="lbl-name">${esc(desc)}</div>${bar ? '' : `<div class="lbl-sub">${esc(p.tipo || '')}</div>`}
+    ${bar ? `<div class="lbl-barbox">${barcodeSVG(p.sku, bh)}<div class="lbl-code">${esc(p.sku)}</div></div>` : ''}
+    <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div>
+    ${bar ? '' : `<div class="lbl-sku">${esc(p.sku)}</div>`}${foot ? `<div class="lbl-foot">${esc(foot)}</div>` : ''}</div>`;
+}
+const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '' });
 function openLabels(pid, qty, price) {
   const p = prod(pid); if (!p) return;
-  const fmt = ui.lblFmt || '50x30', val = price != null && price !== '' ? price : p.sellPrice;
+  const fmt = ui.lblFmt || '60x40', val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
   ui.lbl = { pid };
   openModal(`<h2>Etiquetas</h2><div class="muted" style="margin-bottom:12px">${esc(prodLabel(p))}</div>
     <div class="fgrid"><div><label>Quantidade de etiquetas</label><input type="number" id="lblQty" min="1" max="500" value="${Math.max(1, Math.round(qty) || 1)}"></div>
     <div><label>Formato</label><select id="lblFmt" data-on="lblPrev">${Object.entries(LBL_FORMATS).map(([k, v]) => `<option value="${k}" ${k === fmt ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
-    <div><label>Valor na etiqueta (R$)</label><input type="number" id="lblPrice" min="0" step="0.01" value="${val}" data-on="lblPrev"></div></div>
-    <div class="lbl-prev" id="lblPrev">${labelHTML(p, val, fmt)}</div>
+    <div><label>Valor na etiqueta (R$)</label><input type="number" id="lblPrice" min="0" step="0.01" value="${val}" data-on="lblPrev"></div>
+    <div><label>Texto no rodapé <span class="muted">(opcional)</span></label><input id="lblFoot" value="${esc(foot)}" placeholder="@seuinstagram ou site" data-on="lblPrev"></div>
+    <div class="full"><label class="chk"><input type="checkbox" id="lblBar" ${bar ? 'checked' : ''} data-on="lblPrev"> Código de barras (o SKU, para ler com leitor)</label></div></div>
+    <div class="lbl-prev" id="lblPrev">${labelHTML(p, val, fmt, { bar, foot })}</div>
     <div class="muted sm" style="margin-top:8px">Etiqueta branca com a logo em preto. Na janela de impressão, escolha a impressora de etiquetas e deixe a escala em 100%.</div>
     <div class="foot"><button type="button" class="btn ghost" data-act="closeModal">Fechar</button><button type="button" class="btn" data-act="printLabels">Imprimir etiquetas</button></div>`);
 }
 function printLabels() {
   const p = prod((ui.lbl || {}).pid); if (!p) return;
-  const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), fmt = $('#lblFmt').value, price = num($('#lblPrice').value);
+  const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), fmt = $('#lblFmt').value, price = num($('#lblPrice').value), o = lblOpts();
   ui.lblFmt = fmt;
+  try { localStorage.setItem('zium_lbl_foot', o.foot); localStorage.setItem('zium_lbl_bar', o.bar ? '1' : '0'); } catch { }
   const [, w, h] = LBL_FORMATS[fmt];
   let st = $('#lblpage'); if (!st) { st = document.createElement('style'); st.id = 'lblpage'; document.head.appendChild(st); }
   st.textContent = fmt === 'a4' ? '@page{size:A4;margin:8mm}' : `@page{size:${w}mm ${h}mm;margin:0}`;
   let box = $('#labels'); if (!box) { box = document.createElement('div'); box.id = 'labels'; document.body.appendChild(box); }
-  box.className = 'fmt-' + fmt; box.innerHTML = Array.from({ length: n }, () => labelHTML(p, price, fmt)).join('');
+  box.className = 'fmt-' + fmt; box.innerHTML = Array.from({ length: n }, () => labelHTML(p, price, fmt, o)).join('');
   document.body.classList.add('print-labels');
   const done = () => { document.body.classList.remove('print-labels'); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
@@ -1185,7 +1212,7 @@ const ON = {
   df(el) { ui.df = ui.df || {}; ui.df[el.dataset.k] = el.value; if (el.dataset.k === 'tipo') ui.df.productId = ''; rerender(); },
   lblPrev() {
     const p = prod((ui.lbl || {}).pid); if (!p) return;
-    $('#lblPrev').innerHTML = labelHTML(p, num($('#lblPrice').value), $('#lblFmt').value);
+    $('#lblPrev').innerHTML = labelHTML(p, num($('#lblPrice').value), $('#lblFmt').value, lblOpts());
   },
   xcat(el) { ui.xcat = el.value; rerender(); },
   saleLoc() { $('#lines').innerHTML = ''; addLine(); calcSale(); },
