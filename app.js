@@ -743,7 +743,7 @@ function openLabels(pid, qty, price) {
       <div><label>Etiquetas por linha (colunas)</label><select id="lblCols" data-on="lblPrev"><option value="3" ${cols === '3' ? 'selected' : ''}>3 colunas (bobina inteira)</option><option value="2" ${cols === '2' ? 'selected' : ''}>2 colunas</option><option value="1" ${cols === '1' ? 'selected' : ''}>1 coluna</option></select></div>
       <div><label>Espaço entre as colunas (mm)</label><input type="number" id="lblGap" min="0" max="10" step="0.5" value="${gap}" data-on="lblPrev"></div>
       <div><label>Margem esquerda da bobina (mm)</label><input type="number" id="lblML" min="-5" max="10" step="0.5" value="${ml}" data-on="lblPrev"></div>
-      <div style="grid-column:1/-1"><label>Giro da impressão <span class="muted">(se a etiqueta sair deitada)</span></label><select id="lblRot" data-on="lblPrev"><option value="0" ${rot === '0' ? 'selected' : ''}>Sem giro (normal)</option><option value="90" ${rot === '90' ? 'selected' : ''}>Girar 90° para a direita</option><option value="-90" ${rot === '-90' ? 'selected' : ''}>Girar 90° para a esquerda</option></select></div>
+      <div style="grid-column:1/-1"><label>Giro da impressão <span class="muted">(se a etiqueta sair deitada)</span></label><select id="lblRot" data-on="lblPrev"><option value="0" ${rot === '0' ? 'selected' : ''}>Sem giro (normal)</option><option value="90" ${rot === '90' ? 'selected' : ''}>Girar 90° para a direita</option><option value="180" ${rot === '180' ? 'selected' : ''}>Girar 180° (de cabeça para baixo)</option><option value="-90" ${rot === '-90' ? 'selected' : ''}>Girar 90° para a esquerda</option></select></div>
       <div class="muted sm" id="lblW" style="grid-column:1/-1"></div></div>
     <div class="lbl-prev" id="lblPrev">${labelHTML(p, val, fmt, { bar, foot, h1 })}</div>
     <div class="muted sm" style="margin-top:8px">Etiqueta branca com a logo em preto. Na janela de impressão, escolha a impressora de etiquetas e deixe a escala em 100%.</div>
@@ -760,15 +760,15 @@ function printLabels() {
   try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_fmt: fmt, zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_rot: o.rot, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw })) localStorage.setItem(k, v); } catch { }
   const [, w, h] = LBL_FORMATS[fmt], pw = fmt === '34x68' ? labelPageW(o) : w, rot = fmt === '34x68' ? o.rot : '0';
   let st = $('#lblpage'); if (!st) { st = document.createElement('style'); st.id = 'lblpage'; document.head.appendChild(st); }
-  st.textContent = fmt === 'a4' ? '@page{size:A4;margin:8mm}' : rot !== '0' ? `@page{size:${h}mm ${pw}mm;margin:0}` : `@page{size:${pw}mm ${h}mm;margin:0}`;
+  st.textContent = fmt === 'a4' ? '@page{size:A4;margin:8mm}' : (rot === '90' || rot === '-90') ? `@page{size:${h}mm ${pw}mm;margin:0}` : `@page{size:${pw}mm ${h}mm;margin:0}`;
   let box = $('#labels'); if (!box) { box = document.createElement('div'); box.id = 'labels'; document.body.appendChild(box); }
   box.className = 'fmt-' + fmt;
   if (fmt === '34x68') {
     const cols = o.cols || 3, rows = Math.ceil(n / cols);
     const tr = rot === '90' ? `translate(${h}mm,0) rotate(90deg)` : `translate(0,${pw}mm) rotate(-90deg)`;
     box.innerHTML = Array.from({ length: rows }, (_, r) => {
-      const row = `<div class="lbl-pg" style="width:${pw}mm;height:${h}mm;padding-left:${o.ml}mm;gap:${34 + o.gap - labelCW(o)}mm${rot !== '0' ? `;position:absolute;top:0;left:0;transform-origin:0 0;transform:${tr}` : ''}">${Array.from({ length: Math.min(cols, n - r * cols) }, () => labelHTML(p, price, fmt, o)).join('')}</div>`;
-      return rot !== '0' ? `<div class="lbl-rotwrap" style="width:${h}mm;height:${pw}mm">${row}</div>` : row;
+      const row = `<div class="lbl-pg" style="width:${pw}mm;height:${h}mm;padding-left:${o.ml}mm;gap:${34 + o.gap - labelCW(o)}mm${rot === '180' ? ';transform:rotate(180deg)' : (rot === '90' || rot === '-90') ? `;position:absolute;top:0;left:0;transform-origin:0 0;transform:${tr}` : ''}">${Array.from({ length: Math.min(cols, n - r * cols) }, () => labelHTML(p, price, fmt, o)).join('')}</div>`;
+      return (rot === '90' || rot === '-90') ? `<div class="lbl-rotwrap" style="width:${h}mm;height:${pw}mm">${row}</div>` : row;
     }).join('');
   } else box.innerHTML = Array.from({ length: n }, () => labelHTML(p, price, fmt, o)).join('');
   document.body.classList.add('print-labels');
