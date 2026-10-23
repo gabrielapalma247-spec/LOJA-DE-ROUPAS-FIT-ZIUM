@@ -244,3 +244,13 @@ td.act{white-space:normal}
 
 .lbl-rotwrap{position:relative;overflow:hidden;box-sizing:border-box}
 @media print{ body.print-labels .lbl-rotwrap{page-break-after:always;break-after:page} body.print-labels .lbl-rotwrap .lbl-pg{page-break-after:auto;break-after:auto} }
+
+/* ---- faixa de 100 mm: conteúdo mais estreito (28 mm) ---- */
+.f34x68.narrow .tg-top{padding-left:1.2mm;padding-right:1.2mm}
+.f34x68.narrow .lbl-name{font-size:6.8pt}
+.f34x68.narrow .lbl-size{font-size:9pt}
+.f34x68.narrow .lbl-price{font-size:12.5pt}
+.f34x68.narrow .tg-bot{padding-left:0;padding-right:0}
+.f34x68.narrow .tg-bmeta{padding:0 1mm;box-sizing:border-box;font-size:6.5pt}
+.f34x68.narrow .tg-bmeta b{font-size:8.5pt}
+.f34x68.narrow .lbl-bar{max-width:none}
