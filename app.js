@@ -726,10 +726,10 @@ function labelHTML(p, price, fmt, o = {}) {
     <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div>
     ${bar ? '' : `<div class="lbl-sku">${esc(p.sku)}</div>`}${foot ? `<div class="lbl-foot">${esc(foot)}</div>` : ''}</div>`;
 }
-const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '0', pdfmode: $('#lblPDFMode') ? $('#lblPDFMode').value : 'tall150', dy: $('#lblDY') ? num($('#lblDY').value) : 6, dy1: $('#lblDY1') ? num($('#lblDY1').value) : 7, vp: $('#lblVP') ? num($('#lblVP').value) || 72 : 72, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
+const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '0', pdfmode: $('#lblPDFMode') ? $('#lblPDFMode').value : 'tall150', dy: $('#lblDY') ? num($('#lblDY').value) : 6, dy1: $('#lblDY1') ? num($('#lblDY1').value) : 4, vp: $('#lblVP') ? num($('#lblVP').value) || 72 : 72, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
 function openLabels(pid, qty, price) {
   const p = prod(pid); if (!p) return;
-  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot', '0'), pdfmode = lblGet('zium_lbl_pdfmode', 'tall150'), dyv = lblGet('zium_lbl_dy', '6'), dy1v = lblGet('zium_lbl_dy1', '7'), vpv = lblGet('zium_lbl_vp', '72'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
+  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot', '0'), pdfmode = lblGet('zium_lbl_pdfmode', 'tall150'), dyv = lblGet('zium_lbl_dy', '6'), dy1v = lblGet('zium_lbl_dy1b', '4'), vpv = lblGet('zium_lbl_vp', '72'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
   ui.lbl = { pid };
   openModal(`<h2>Etiquetas</h2><div class="muted" style="margin-bottom:12px">${esc(prodLabel(p))}</div>
     <div class="fgrid"><div><label>Quantidade de etiquetas</label><input type="number" id="lblQty" min="1" max="500" value="${Math.max(1, Math.round(qty) || 1)}"></div>
@@ -803,10 +803,10 @@ async function buildLabelsPDF(p, price, o, n) {
     if (foot) { doc.setFont('helvetica', 'normal'); doc.setFontSize(5); doc.text(pdfTxt(foot), cx, 44.2, { align: 'center' }); }
     if (widths) {
       let x = cx - bw / 2; widths.forEach((w, i) => { if (i % 2 === 0) doc.rect(x, 47, w * 0.25, 8, 'F'); x += w * 0.25; });
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.text(pdfTxt(p.sku), cx, 57.4, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.text(pdfTxt(p.sku), cx, 57.0, { align: 'center' });
     } else { doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.text(pdfTxt(p.sku), cx, 50, { align: 'center' }); }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.text(p.size ? 'TAM ' + pdfTxt(p.size) : '', x0 + 1, 62.6);
-    doc.setFontSize(8.5); doc.text(price_, x0 + cw - 1, 62.6, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.text(p.size ? 'TAM ' + pdfTxt(p.size) : '', x0 + 1, 61.0);
+    doc.setFontSize(8.5); doc.text(price_, x0 + cw - 1, 61.0, { align: 'right' });
   };
   const pages = Math.ceil(rows / rowsPer);
   for (let pg = 0; pg < pages; pg++) {
@@ -825,7 +825,7 @@ async function buildLabelsPDF(p, price, o, n) {
 async function printLabelsPDF() {
   const p = prod((ui.lbl || {}).pid); if (!p) return;
   const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), price = num($('#lblPrice').value), o = lblOpts();
-  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot: o.pdfrot, zium_lbl_pdfmode: o.pdfmode, zium_lbl_dy: o.dy, zium_lbl_dy1: o.dy1, zium_lbl_vp: o.vp })) localStorage.setItem(k, v); } catch { }
+  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot: o.pdfrot, zium_lbl_pdfmode: o.pdfmode, zium_lbl_dy: o.dy, zium_lbl_dy1b: o.dy1, zium_lbl_vp: o.vp })) localStorage.setItem(k, v); } catch { }
   try {
     const doc = await buildLabelsPDF(p, price, o, n), url = URL.createObjectURL(doc.output('blob'));
     if (!window.open(url, '_blank')) doc.save(`etiquetas-${p.sku}.pdf`);
