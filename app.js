@@ -726,10 +726,10 @@ function labelHTML(p, price, fmt, o = {}) {
     <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div>
     ${bar ? '' : `<div class="lbl-sku">${esc(p.sku)}</div>`}${foot ? `<div class="lbl-foot">${esc(foot)}</div>` : ''}</div>`;
 }
-const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '0', pdfmode: $('#lblPDFMode') ? $('#lblPDFMode').value : 'tall150', gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
+const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '0', pdfmode: $('#lblPDFMode') ? $('#lblPDFMode').value : 'tall150', dy: $('#lblDY') ? num($('#lblDY').value) : 6, vp: $('#lblVP') ? num($('#lblVP').value) || 72 : 72, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
 function openLabels(pid, qty, price) {
   const p = prod(pid); if (!p) return;
-  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot', '0'), pdfmode = lblGet('zium_lbl_pdfmode', 'tall150'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
+  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot', '0'), pdfmode = lblGet('zium_lbl_pdfmode', 'tall150'), dyv = lblGet('zium_lbl_dy', '6'), vpv = lblGet('zium_lbl_vp', '72'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
   ui.lbl = { pid };
   openModal(`<h2>Etiquetas</h2><div class="muted" style="margin-bottom:12px">${esc(prodLabel(p))}</div>
     <div class="fgrid"><div><label>Quantidade de etiquetas</label><input type="number" id="lblQty" min="1" max="500" value="${Math.max(1, Math.round(qty) || 1)}"></div>
@@ -744,6 +744,8 @@ function openLabels(pid, qty, price) {
       <div><label>Espaço entre as colunas (mm)</label><input type="number" id="lblGap" min="0" max="10" step="0.5" value="${gap}" data-on="lblPrev"></div>
       <div><label>Margem esquerda da bobina (mm)</label><input type="number" id="lblML" min="-5" max="10" step="0.5" value="${ml}" data-on="lblPrev"></div>
       <div style="grid-column:1/-1"><label>Página do PDF <span class="muted">(precisa combinar com o papel escolhido na impressão)</span></label><select id="lblPDFMode" data-on="lblPrev"><option value="tall150" ${pdfmode === 'tall150' ? 'selected' : ''}>Em pé 100 × 150 mm (papel que já existe no driver)</option><option value="tall140" ${pdfmode === 'tall140' ? 'selected' : ''}>Em pé 100 × 140 mm (papel novo, 2 linhas exatas)</option><option value="land" ${pdfmode === 'land' ? 'selected' : ''}>Deitada 100 × 68 mm (1 linha)</option></select></div>
+      <div><label>Descer o conteúdo (mm)</label><input type="number" id="lblDY" min="-10" max="30" step="0.5" value="${dyv}" data-on="lblPrev"></div>
+      <div><label>Passo entre as linhas (mm)</label><input type="number" id="lblVP" min="60" max="80" step="0.5" value="${vpv}" data-on="lblPrev"></div>
       <div style="grid-column:1/-1"><label>Giro do PDF <span class="muted">(use 180° se sair de cabeça para baixo)</span></label><select id="lblPDFRot" data-on="lblPrev"><option value="0" ${pdfrot === '0' ? 'selected' : ''}>Sem giro</option><option value="180" ${pdfrot === '180' ? 'selected' : ''}>180° (de cabeça para baixo)</option></select></div>
       <div style="grid-column:1/-1"><label>Giro da impressão direta <span class="muted">(modo antigo, só se não usar o PDF)</span></label><select id="lblRot" data-on="lblPrev"><option value="0" ${rot === '0' ? 'selected' : ''}>Sem giro (normal)</option><option value="90" ${rot === '90' ? 'selected' : ''}>Girar 90° para a direita</option><option value="180" ${rot === '180' ? 'selected' : ''}>Girar 180° (de cabeça para baixo)</option><option value="-90" ${rot === '-90' ? 'selected' : ''}>Girar 90° para a esquerda</option></select></div>
       <div class="muted sm" id="lblW" style="grid-column:1/-1"></div></div>
@@ -784,7 +786,7 @@ const pdfTxt = t => String(t == null ? '' : t).replace(/ /g, ' ');
 async function buildLabelsPDF(p, price, o, n) {
   const jsPDF = await loadJsPDF(), logo = await logoPNG();
   const cols = o.cols || 3, cw = labelCW(o), pw = labelPageW(o), rows = Math.ceil(n / cols), pitch = 34 + (o.gap || 0);
-  const mode = o.pdfmode || 'land', tall = mode !== 'land', H = mode === 'tall140' ? 140 : mode === 'tall150' ? 150 : 68, rowsPer = tall ? 2 : 1, VP = 70, orient = tall ? 'portrait' : 'landscape';
+  const mode = o.pdfmode || 'land', tall = mode !== 'land', H = mode === 'tall140' ? 140 : mode === 'tall150' ? 150 : 68, rowsPer = tall ? 2 : 1, VP = num(o.vp) || 72, DY = num(o.dy) || 0, orient = tall ? 'portrait' : 'landscape';
   const h1 = Math.min(60, Math.max(20, num(o.h1) || 45)), ml = o.ml || 0, rot = o.pdfrot === '180';
   const doc = new jsPDF({ orientation: orient, unit: 'mm', format: [pw, H] }), k = doc.internal.scaleFactor;
   doc.setFillColor(0, 0, 0); doc.setDrawColor(0, 0, 0); doc.setTextColor(0, 0, 0);
@@ -811,7 +813,7 @@ async function buildLabelsPDF(p, price, o, n) {
     if (rot) doc.internal.write(`q -1 0 0 -1 ${(pw * k).toFixed(3)} ${(H * k).toFixed(3)} cm`);
     for (let ri = 0; ri < rowsPer; ri++) {
       const r = pg * rowsPer + ri; if (r >= rows) break;
-      doc.internal.write(`q 1 0 0 1 0 ${(-ri * VP * k).toFixed(3)} cm`);
+      doc.internal.write(`q 1 0 0 1 0 ${(-(DY + ri * VP) * k).toFixed(3)} cm`);
       for (let c = 0; c < Math.min(cols, n - r * cols); c++) label(ml + c * pitch);
       doc.internal.write('Q');
     }
@@ -822,7 +824,7 @@ async function buildLabelsPDF(p, price, o, n) {
 async function printLabelsPDF() {
   const p = prod((ui.lbl || {}).pid); if (!p) return;
   const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), price = num($('#lblPrice').value), o = lblOpts();
-  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot: o.pdfrot, zium_lbl_pdfmode: o.pdfmode })) localStorage.setItem(k, v); } catch { }
+  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot: o.pdfrot, zium_lbl_pdfmode: o.pdfmode, zium_lbl_dy: o.dy, zium_lbl_vp: o.vp })) localStorage.setItem(k, v); } catch { }
   try {
     const doc = await buildLabelsPDF(p, price, o, n), url = URL.createObjectURL(doc.output('blob'));
     if (!window.open(url, '_blank')) doc.save(`etiquetas-${p.sku}.pdf`);
