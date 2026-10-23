@@ -207,3 +207,25 @@ td.act{white-space:normal}
 .f50x30.wb .lbl-size,.fa4.wb .lbl-size{font-size:7.5pt;padding:.1mm .8mm}
 .f50x30.wb .lbl-price,.fa4.wb .lbl-price{font-size:11.5pt}
 .f50x30.wb .lbl-foot,.fa4.wb .lbl-foot{font-size:5pt}
+
+/* ---- tag 34 x 68 mm, 3 colunas, 2 partes (picote) ---- */
+.f34x68{width:34mm;height:68mm;padding:0;position:relative;justify-content:flex-start;border:.25mm solid #d6d6d6}
+.f34x68 .tg-top{height:var(--h1,45mm);padding:2mm 2mm 1mm;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;overflow:hidden}
+.f34x68 .lbl-logo{height:6.5mm}
+.f34x68 .lbl-name{font-size:8pt;text-transform:uppercase;-webkit-line-clamp:4;margin-top:1mm}
+.f34x68 .tg-mid{display:flex;flex-direction:column;gap:1mm;align-items:flex-start}
+.f34x68 .lbl-size{font-size:11pt}
+.f34x68 .lbl-price{font-size:15pt;text-align:left}
+.f34x68 .lbl-foot{font-size:5pt;text-align:left}
+.f34x68 .tg-cut{position:absolute;left:0;right:0;top:var(--h1,45mm);border-top:.25mm dashed #9a9a9a}
+.f34x68 .tg-bot{height:calc(68mm - var(--h1,45mm));padding:1.2mm 1.5mm;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4mm;box-sizing:border-box;overflow:hidden}
+.f34x68 .lbl-bar{max-width:100%}
+.f34x68 .lbl-code{font-size:5.5pt;margin:0}
+.f34x68 .tg-bmeta{display:flex;justify-content:space-between;align-items:baseline;width:100%;font-size:7pt;font-weight:700}
+.f34x68 .tg-bmeta b{font-size:9pt}
+.lbl-pg{display:flex;box-sizing:border-box;overflow:hidden}
+@media print{
+  body.print-labels .lbl-pg{page-break-after:always;break-after:page}
+  body.print-labels .lbl-pg .lbl{page-break-after:auto;break-after:auto;border:0}
+  body.print-labels .f34x68 .tg-cut{display:none}
+}
