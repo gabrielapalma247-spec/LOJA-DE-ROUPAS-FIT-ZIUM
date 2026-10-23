@@ -229,3 +229,15 @@ td.act{white-space:normal}
   body.print-labels .lbl-pg .lbl{page-break-after:auto;break-after:auto;border:0}
   body.print-labels .f34x68 .tg-cut{display:none}
 }
+
+/* ---- ajuste ao rolo real: furo de pendurar no topo, conteúdo centralizado ---- */
+.f34x68{border-radius:2mm}
+.f34x68::before{content:'';position:absolute;top:4.5mm;left:50%;width:3mm;height:3mm;margin-left:-1.5mm;border:.3mm solid #bdbdbd;border-radius:50%}
+.f34x68 .tg-top{padding:8.5mm 2mm 1.2mm;align-items:center;text-align:center;justify-content:space-between}
+.f34x68 .lbl-logo{height:6mm;align-self:center}
+.f34x68 .lbl-name{font-size:7.5pt;text-align:center;-webkit-line-clamp:3;margin-top:0}
+.f34x68 .tg-mid{align-items:center;gap:.8mm;width:100%}
+.f34x68 .lbl-size{font-size:10pt}
+.f34x68 .lbl-price{font-size:14pt;text-align:center}
+.f34x68 .lbl-foot{text-align:center}
+@media print{ body.print-labels .f34x68::before{display:none} }

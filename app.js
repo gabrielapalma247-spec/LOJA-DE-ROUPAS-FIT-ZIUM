@@ -740,7 +740,7 @@ function openLabels(pid, qty, price) {
     <div id="lblAdv" class="fgrid" style="margin-top:12px;${fmt === '34x68' ? '' : 'display:none'}">
       <div><label>Altura da parte de cima (mm)</label><input type="number" id="lblH1" min="20" max="60" step="1" value="${h1}" data-on="lblPrev"></div>
       <div><label>Espaço entre as 3 colunas (mm)</label><input type="number" id="lblGap" min="0" max="10" step="0.5" value="${gap}" data-on="lblPrev"></div>
-      <div><label>Margem esquerda da bobina (mm)</label><input type="number" id="lblML" min="0" max="10" step="0.5" value="${ml}" data-on="lblPrev"></div>
+      <div><label>Margem esquerda da bobina (mm)</label><input type="number" id="lblML" min="-5" max="10" step="0.5" value="${ml}" data-on="lblPrev"></div>
       <div class="muted sm" id="lblW" style="grid-column:1/-1"></div></div>
     <div class="lbl-prev" id="lblPrev">${labelHTML(p, val, fmt, { bar, foot, h1 })}</div>
     <div class="muted sm" style="margin-top:8px">Etiqueta branca com a logo em preto. Na janela de impressão, escolha a impressora de etiquetas e deixe a escala em 100%.</div>
