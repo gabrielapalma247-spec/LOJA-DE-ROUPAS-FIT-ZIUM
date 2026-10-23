@@ -726,10 +726,10 @@ function labelHTML(p, price, fmt, o = {}) {
     <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div>
     ${bar ? '' : `<div class="lbl-sku">${esc(p.sku)}</div>`}${foot ? `<div class="lbl-foot">${esc(foot)}</div>` : ''}</div>`;
 }
-const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
+const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
 function openLabels(pid, qty, price) {
   const p = prod(pid); if (!p) return;
-  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
+  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
   ui.lbl = { pid };
   openModal(`<h2>Etiquetas</h2><div class="muted" style="margin-bottom:12px">${esc(prodLabel(p))}</div>
     <div class="fgrid"><div><label>Quantidade de etiquetas</label><input type="number" id="lblQty" min="1" max="500" value="${Math.max(1, Math.round(qty) || 1)}"></div>
@@ -741,6 +741,7 @@ function openLabels(pid, qty, price) {
       <div><label>Altura da parte de cima (mm)</label><input type="number" id="lblH1" min="20" max="60" step="1" value="${h1}" data-on="lblPrev"></div>
       <div><label>Espaço entre as 3 colunas (mm)</label><input type="number" id="lblGap" min="0" max="10" step="0.5" value="${gap}" data-on="lblPrev"></div>
       <div><label>Margem esquerda da bobina (mm)</label><input type="number" id="lblML" min="-5" max="10" step="0.5" value="${ml}" data-on="lblPrev"></div>
+      <div style="grid-column:1/-1"><label>Giro da impressão <span class="muted">(se a etiqueta sair deitada)</span></label><select id="lblRot" data-on="lblPrev"><option value="0" ${rot === '0' ? 'selected' : ''}>Sem giro (normal)</option><option value="90" ${rot === '90' ? 'selected' : ''}>Girar 90° para a direita</option><option value="-90" ${rot === '-90' ? 'selected' : ''}>Girar 90° para a esquerda</option></select></div>
       <div class="muted sm" id="lblW" style="grid-column:1/-1"></div></div>
     <div class="lbl-prev" id="lblPrev">${labelHTML(p, val, fmt, { bar, foot, h1 })}</div>
     <div class="muted sm" style="margin-top:8px">Etiqueta branca com a logo em preto. Na janela de impressão, escolha a impressora de etiquetas e deixe a escala em 100%.</div>
@@ -752,15 +753,19 @@ function printLabels() {
   const p = prod((ui.lbl || {}).pid); if (!p) return;
   const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), fmt = $('#lblFmt').value, price = num($('#lblPrice').value), o = lblOpts();
   ui.lblFmt = fmt;
-  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_fmt: fmt, zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml })) localStorage.setItem(k, v); } catch { }
-  const [, w, h] = LBL_FORMATS[fmt], pw = fmt === '34x68' ? labelPageW(o) : w;
+  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_fmt: fmt, zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_rot: o.rot })) localStorage.setItem(k, v); } catch { }
+  const [, w, h] = LBL_FORMATS[fmt], pw = fmt === '34x68' ? labelPageW(o) : w, rot = fmt === '34x68' ? o.rot : '0';
   let st = $('#lblpage'); if (!st) { st = document.createElement('style'); st.id = 'lblpage'; document.head.appendChild(st); }
-  st.textContent = fmt === 'a4' ? '@page{size:A4;margin:8mm}' : `@page{size:${pw}mm ${h}mm;margin:0}`;
+  st.textContent = fmt === 'a4' ? '@page{size:A4;margin:8mm}' : rot !== '0' ? `@page{size:${h}mm ${pw}mm;margin:0}` : `@page{size:${pw}mm ${h}mm;margin:0}`;
   let box = $('#labels'); if (!box) { box = document.createElement('div'); box.id = 'labels'; document.body.appendChild(box); }
   box.className = 'fmt-' + fmt;
   if (fmt === '34x68') {
     const rows = Math.ceil(n / 3);
-    box.innerHTML = Array.from({ length: rows }, (_, r) => `<div class="lbl-pg" style="width:${pw}mm;height:${h}mm;padding-left:${o.ml}mm;gap:${o.gap}mm">${Array.from({ length: Math.min(3, n - r * 3) }, () => labelHTML(p, price, fmt, o)).join('')}</div>`).join('');
+    const tr = rot === '90' ? `translate(${h}mm,0) rotate(90deg)` : `translate(0,${pw}mm) rotate(-90deg)`;
+    box.innerHTML = Array.from({ length: rows }, (_, r) => {
+      const row = `<div class="lbl-pg" style="width:${pw}mm;height:${h}mm;padding-left:${o.ml}mm;gap:${o.gap}mm${rot !== '0' ? `;position:absolute;top:0;left:0;transform-origin:0 0;transform:${tr}` : ''}">${Array.from({ length: Math.min(3, n - r * 3) }, () => labelHTML(p, price, fmt, o)).join('')}</div>`;
+      return rot !== '0' ? `<div class="lbl-rotwrap" style="width:${h}mm;height:${pw}mm">${row}</div>` : row;
+    }).join('');
   } else box.innerHTML = Array.from({ length: n }, () => labelHTML(p, price, fmt, o)).join('');
   document.body.classList.add('print-labels');
   const done = () => { document.body.classList.remove('print-labels'); window.removeEventListener('afterprint', done); };

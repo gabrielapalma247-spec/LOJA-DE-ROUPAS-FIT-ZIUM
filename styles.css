@@ -241,3 +241,6 @@ td.act{white-space:normal}
 .f34x68 .lbl-price{font-size:14pt;text-align:center}
 .f34x68 .lbl-foot{text-align:center}
 @media print{ body.print-labels .f34x68::before{display:none} }
+
+.lbl-rotwrap{position:relative;overflow:hidden;box-sizing:border-box}
+@media print{ body.print-labels .lbl-rotwrap{page-break-after:always;break-after:page} body.print-labels .lbl-rotwrap .lbl-pg{page-break-after:auto;break-after:auto} }
