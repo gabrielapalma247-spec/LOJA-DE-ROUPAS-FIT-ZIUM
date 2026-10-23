@@ -726,10 +726,10 @@ function labelHTML(p, price, fmt, o = {}) {
     <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div>
     ${bar ? '' : `<div class="lbl-sku">${esc(p.sku)}</div>`}${foot ? `<div class="lbl-foot">${esc(foot)}</div>` : ''}</div>`;
 }
-const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
+const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '180', gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
 function openLabels(pid, qty, price) {
   const p = prod(pid); if (!p) return;
-  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
+  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot', '180'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
   ui.lbl = { pid };
   openModal(`<h2>Etiquetas</h2><div class="muted" style="margin-bottom:12px">${esc(prodLabel(p))}</div>
     <div class="fgrid"><div><label>Quantidade de etiquetas</label><input type="number" id="lblQty" min="1" max="500" value="${Math.max(1, Math.round(qty) || 1)}"></div>
@@ -743,15 +743,84 @@ function openLabels(pid, qty, price) {
       <div><label>Etiquetas por linha (colunas)</label><select id="lblCols" data-on="lblPrev"><option value="3" ${cols === '3' ? 'selected' : ''}>3 colunas (bobina inteira)</option><option value="2" ${cols === '2' ? 'selected' : ''}>2 colunas</option><option value="1" ${cols === '1' ? 'selected' : ''}>1 coluna</option></select></div>
       <div><label>Espaço entre as colunas (mm)</label><input type="number" id="lblGap" min="0" max="10" step="0.5" value="${gap}" data-on="lblPrev"></div>
       <div><label>Margem esquerda da bobina (mm)</label><input type="number" id="lblML" min="-5" max="10" step="0.5" value="${ml}" data-on="lblPrev"></div>
-      <div style="grid-column:1/-1"><label>Giro da impressão <span class="muted">(se a etiqueta sair deitada)</span></label><select id="lblRot" data-on="lblPrev"><option value="0" ${rot === '0' ? 'selected' : ''}>Sem giro (normal)</option><option value="90" ${rot === '90' ? 'selected' : ''}>Girar 90° para a direita</option><option value="180" ${rot === '180' ? 'selected' : ''}>Girar 180° (de cabeça para baixo)</option><option value="-90" ${rot === '-90' ? 'selected' : ''}>Girar 90° para a esquerda</option></select></div>
+      <div style="grid-column:1/-1"><label>Giro do PDF <span class="muted">(use 180° se sair de cabeça para baixo)</span></label><select id="lblPDFRot" data-on="lblPrev"><option value="180" ${pdfrot === '180' ? 'selected' : ''}>180° (padrão da sua impressora)</option><option value="0" ${pdfrot === '0' ? 'selected' : ''}>Sem giro</option></select></div>
+      <div style="grid-column:1/-1"><label>Giro da impressão direta <span class="muted">(modo antigo, só se não usar o PDF)</span></label><select id="lblRot" data-on="lblPrev"><option value="0" ${rot === '0' ? 'selected' : ''}>Sem giro (normal)</option><option value="90" ${rot === '90' ? 'selected' : ''}>Girar 90° para a direita</option><option value="180" ${rot === '180' ? 'selected' : ''}>Girar 180° (de cabeça para baixo)</option><option value="-90" ${rot === '-90' ? 'selected' : ''}>Girar 90° para a esquerda</option></select></div>
       <div class="muted sm" id="lblW" style="grid-column:1/-1"></div></div>
     <div class="lbl-prev" id="lblPrev">${labelHTML(p, val, fmt, { bar, foot, h1 })}</div>
     <div class="muted sm" style="margin-top:8px">Etiqueta branca com a logo em preto. Na janela de impressão, escolha a impressora de etiquetas e deixe a escala em 100%.</div>
-    <div class="foot"><button type="button" class="btn ghost" data-act="closeModal">Fechar</button><button type="button" class="btn" data-act="printLabels">Imprimir etiquetas</button></div>`);
+    <div class="foot"><button type="button" class="btn ghost" data-act="closeModal">Fechar</button><button type="button" class="btn ghost" data-act="printLabels" title="Modo antigo, direto pela página">Imprimir direto</button><button type="button" class="btn" data-act="printLabelsPDF">Imprimir pelo PDF</button></div>`);
   ON.lblPrev();
 }
 /* largura útil de cada etiqueta: se a impressora imprime menos que a bobina (ex.: 100 mm), o conteúdo de cada coluna encolhe e fica centralizado na etiqueta de 34 mm */
 function labelCW(o) { const c = o.cols || 3, P = o.pw || 100; return Math.max(20, Math.min(34, P - (c - 1) * (34 + (o.gap || 0)))); }
+/* ---------- PDF das etiquetas (caminho de impressão que a impressora de 100 mm entende) ---------- */
+async function loadJsPDF() {
+  if (window.jspdf) return window.jspdf.jsPDF;
+  await new Promise((res, rej) => { const el = document.createElement('script'); el.src = 'jspdf.min.js'; el.onload = res; el.onerror = () => rej(new Error('Não consegui carregar o gerador de PDF.')); document.head.appendChild(el); });
+  return window.jspdf.jsPDF;
+}
+function logoPNG() {
+  return new Promise((res, rej) => {
+    const img = new Image(), W = 1000, H = Math.round(W * 948.7 / 1687.72);
+    img.onload = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(img, 0, 0, W, H); res(c.toDataURL('image/png')); };
+    img.onerror = () => rej(new Error('Não consegui carregar a logo.'));
+    img.src = 'logo-black.svg';
+  });
+}
+/* quebra de linha só em espaços e depois de "/" (nunca no meio da palavra) */
+function pdfWrap(doc, text, maxW) {
+  const pieces = []; text.split(' ').forEach(w => { const parts = w.split('/'); parts.forEach((x, i) => pieces.push({ t: i < parts.length - 1 ? x + '/' : x, glue: i > 0 })); pieces.push({ sp: true }); });
+  const lines = []; let cur = '';
+  for (const pc of pieces) {
+    if (pc.sp) { cur += ' '; continue; }
+    const test = cur + pc.t;
+    if (cur.trim() && doc.getTextWidth(test.trimEnd()) > maxW && !(pc.glue && false)) { lines.push(cur.trimEnd()); cur = pc.t; } else cur = test;
+  }
+  if (cur.trim()) lines.push(cur.trimEnd());
+  return lines;
+}
+const pdfTxt = t => String(t == null ? '' : t).replace(/ /g, ' ');
+async function buildLabelsPDF(p, price, o, n) {
+  const jsPDF = await loadJsPDF(), logo = await logoPNG();
+  const cols = o.cols || 3, cw = labelCW(o), pw = labelPageW(o), H = 68, rows = Math.ceil(n / cols), pitch = 34 + (o.gap || 0);
+  const h1 = Math.min(60, Math.max(20, num(o.h1) || 45)), ml = o.ml || 0, rot = o.pdfrot === '180';
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pw, H] }), k = doc.internal.scaleFactor;
+  doc.setFillColor(0, 0, 0); doc.setDrawColor(0, 0, 0); doc.setTextColor(0, 0, 0);
+  const desc = [p.name, p.color].filter(Boolean).join(' · ').toUpperCase(), price_ = pdfTxt(brl(price)), foot = (o.foot || '').trim();
+  const widths = o.bar !== false ? code128(p.sku) : null, modules = widths ? widths.reduce((a, b) => a + b, 0) : 0, bw = modules * 0.25;
+  const label = x0 => {
+    const cx = x0 + cw / 2, narrow = cw < 34;
+    doc.addImage(logo, 'PNG', cx - 5.34, 8.5, 10.68, 6.0);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(narrow ? 6.8 : 7.5);
+    pdfWrap(doc, pdfTxt(desc), cw - 2.4).slice(0, 3).forEach((ln, i) => doc.text(ln, cx, 18.5 + i * 2.8, { align: 'center' }));
+    if (p.size) { doc.setLineWidth(0.35); doc.roundedRect(cx - 8, 29.2, 16, 5.8, 1.2, 1.2, 'S'); doc.setFontSize(9); doc.text('TAM ' + pdfTxt(p.size), cx, 33.4, { align: 'center' }); }
+    doc.setFontSize(narrow ? 12.5 : 14); doc.text(price_, cx, 41.2, { align: 'center' });
+    if (foot) { doc.setFont('helvetica', 'normal'); doc.setFontSize(5); doc.text(pdfTxt(foot), cx, 44.2, { align: 'center' }); }
+    if (widths) {
+      let x = cx - bw / 2; widths.forEach((w, i) => { if (i % 2 === 0) doc.rect(x, 47, w * 0.25, 8, 'F'); x += w * 0.25; });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.text(pdfTxt(p.sku), cx, 57.4, { align: 'center' });
+    } else { doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.text(pdfTxt(p.sku), cx, 50, { align: 'center' }); }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.text(p.size ? 'TAM ' + pdfTxt(p.size) : '', x0 + 1, 62.6);
+    doc.setFontSize(8.5); doc.text(price_, x0 + cw - 1, 62.6, { align: 'right' });
+  };
+  for (let r = 0; r < rows; r++) {
+    if (r > 0) doc.addPage([pw, H], 'landscape');
+    if (rot) doc.internal.write(`q -1 0 0 -1 ${(pw * k).toFixed(3)} ${(H * k).toFixed(3)} cm`);
+    for (let c = 0; c < Math.min(cols, n - r * cols); c++) label(ml + c * pitch);
+    if (rot) doc.internal.write('Q');
+  }
+  return doc;
+}
+async function printLabelsPDF() {
+  const p = prod((ui.lbl || {}).pid); if (!p) return;
+  const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), price = num($('#lblPrice').value), o = lblOpts();
+  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot: o.pdfrot })) localStorage.setItem(k, v); } catch { }
+  try {
+    const doc = await buildLabelsPDF(p, price, o, n), url = URL.createObjectURL(doc.output('blob'));
+    if (!window.open(url, '_blank')) doc.save(`etiquetas-${p.sku}.pdf`);
+    toast('PDF aberto em outra aba: aperte Ctrl + P para imprimir.');
+  } catch (e) { toast(e.message || 'Não consegui gerar o PDF.', true); }
+}
 function labelPageW(o) { const c = o.cols || 3; return (c - 1) * (34 + (o.gap || 0)) + labelCW(o) + 2 * (o.ml || 0); }
 function printLabels() {
   const p = prod((ui.lbl || {}).pid); if (!p) return;
@@ -1049,6 +1118,7 @@ const ACT = {
   labels(el) { if (needCo()) return; openLabels(el.dataset.pid, +el.dataset.qty || 1); },
   labelsEntry(el) { const e = db.entries.find(x => x.id === el.dataset.id); if (e) openLabels(e.productId, e.qty, e.sellPrice); },
   printLabels,
+  printLabelsPDF,
   company(el) {
     ui.company = el.dataset.k; try { localStorage.setItem('zium_empresa', ui.company || 'todas'); } catch { }
     ui.loc = ''; ui.lastLoc = ''; ui.df = {}; ui.estq = ''; ui.cq = ''; ui.vq = ''; ui.vtype = ''; ui.vpay = ''; ui.xcat = '';
