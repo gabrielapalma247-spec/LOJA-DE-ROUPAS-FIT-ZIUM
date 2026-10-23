@@ -726,10 +726,10 @@ function labelHTML(p, price, fmt, o = {}) {
     <div class="lbl-row"><div class="lbl-size">${p.size ? 'TAM ' + esc(p.size) : ''}</div><div class="lbl-price">${brl(price)}</div></div>
     ${bar ? '' : `<div class="lbl-sku">${esc(p.sku)}</div>`}${foot ? `<div class="lbl-foot">${esc(foot)}</div>` : ''}</div>`;
 }
-const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '0', pdfmode: $('#lblPDFMode') ? $('#lblPDFMode').value : 'tall140', dy: $('#lblDY') ? num($('#lblDY').value) : 4, dy1: $('#lblDY1') ? num($('#lblDY1').value) : 0, vp: $('#lblVP') ? num($('#lblVP').value) || 72 : 72, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
+const lblOpts = () => ({ bar: $('#lblBar') ? $('#lblBar').checked : true, foot: $('#lblFoot') ? $('#lblFoot').value : '', h1: $('#lblH1') ? num($('#lblH1').value) : 45, rot: $('#lblRot') ? $('#lblRot').value : '0', cols: $('#lblCols') ? +$('#lblCols').value : 3, pw: $('#lblPW') ? num($('#lblPW').value) || 100 : 100, pdfrot: $('#lblPDFRot') ? $('#lblPDFRot').value : '0', pdfmode: $('#lblPDFMode') ? $('#lblPDFMode').value : 'tall140', dy: $('#lblDY') ? num($('#lblDY').value) : 4, dy1: $('#lblDY1') ? num($('#lblDY1').value) : 0, vp: $('#lblVP') ? num($('#lblVP').value) || 65 : 65, gap: $('#lblGap') ? num($('#lblGap').value) : 2, ml: $('#lblML') ? num($('#lblML').value) : 0 });
 function openLabels(pid, qty, price) {
   const p = prod(pid); if (!p) return;
-  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot2', '0'), pdfmode = lblGet('zium_lbl_pdfmode2', 'tall140'), dyv = lblGet('zium_lbl_dy3', '4'), dy1v = lblGet('zium_lbl_dy1d', '0'), vpv = lblGet('zium_lbl_vp', '72'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
+  const fmt = ui.lblFmt || lblGet('zium_lbl_fmt', '34x68'), h1 = lblGet('zium_lbl_h1', '45'), gap = lblGet('zium_lbl_gap', '2'), ml = lblGet('zium_lbl_ml', '0'), rot = lblGet('zium_lbl_rot', '0'), cols = lblGet('zium_lbl_cols', '3'), pwid = lblGet('zium_lbl_pw', '100'), pdfrot = lblGet('zium_lbl_pdfrot2', '0'), pdfmode = lblGet('zium_lbl_pdfmode2', 'tall140'), dyv = lblGet('zium_lbl_dy3', '4'), dy1v = lblGet('zium_lbl_dy1d', '0'), vpv = lblGet('zium_lbl_vp2', '65'), val = price != null && price !== '' ? price : p.sellPrice, foot = lblGet('zium_lbl_foot', ''), bar = lblGet('zium_lbl_bar', '1') === '1';
   ui.lbl = { pid };
   openModal(`<h2>Etiquetas</h2><div class="muted" style="margin-bottom:12px">${esc(prodLabel(p))}</div>
     <div class="fgrid"><div><label>Quantidade de etiquetas</label><input type="number" id="lblQty" min="1" max="500" value="${Math.max(1, Math.round(qty) || 1)}"></div>
@@ -787,7 +787,7 @@ const pdfTxt = t => String(t == null ? '' : t).replace(/ /g, ' ');
 async function buildLabelsPDF(p, price, o, n) {
   const jsPDF = await loadJsPDF(), logo = await logoPNG();
   const cols = o.cols || 3, cw = labelCW(o), pw = labelPageW(o), rows = Math.ceil(n / cols), pitch = 34 + (o.gap || 0);
-  const mode = o.pdfmode || 'land', tall = mode !== 'land', H = mode === 'tall140' ? 140 : mode === 'tall150' ? 150 : 68, rowsPer = tall ? 2 : 1, VP = num(o.vp) || 72, DY = num(o.dy) || 0, DY1 = num(o.dy1) || 0, orient = tall ? 'portrait' : 'landscape';
+  const mode = o.pdfmode || 'land', tall = mode !== 'land', H = mode === 'tall140' ? 140 : mode === 'tall150' ? 150 : 68, rowsPer = tall ? 2 : 1, VP = num(o.vp) || 65, DY = num(o.dy) || 0, DY1 = num(o.dy1) || 0, orient = tall ? 'portrait' : 'landscape';
   const h1 = Math.min(60, Math.max(20, num(o.h1) || 45)), ml = o.ml || 0, rot = o.pdfrot === '180';
   const doc = new jsPDF({ orientation: orient, unit: 'mm', format: [pw, H] }), k = doc.internal.scaleFactor;
   doc.setFillColor(0, 0, 0); doc.setDrawColor(0, 0, 0); doc.setTextColor(0, 0, 0);
@@ -825,7 +825,7 @@ async function buildLabelsPDF(p, price, o, n) {
 async function printLabelsPDF() {
   const p = prod((ui.lbl || {}).pid); if (!p) return;
   const n = Math.max(1, Math.min(500, parseInt($('#lblQty').value) || 1)), price = num($('#lblPrice').value), o = lblOpts();
-  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot2: o.pdfrot, zium_lbl_pdfmode2: o.pdfmode, zium_lbl_dy3: o.dy, zium_lbl_dy1d: o.dy1, zium_lbl_vp: o.vp })) localStorage.setItem(k, v); } catch { }
+  try { for (const [k, v] of Object.entries({ zium_lbl_foot: o.foot, zium_lbl_bar: o.bar ? '1' : '0', zium_lbl_h1: o.h1, zium_lbl_gap: o.gap, zium_lbl_ml: o.ml, zium_lbl_cols: o.cols, zium_lbl_pw: o.pw, zium_lbl_pdfrot2: o.pdfrot, zium_lbl_pdfmode2: o.pdfmode, zium_lbl_dy3: o.dy, zium_lbl_dy1d: o.dy1, zium_lbl_vp2: o.vp })) localStorage.setItem(k, v); } catch { }
   try {
     const doc = await buildLabelsPDF(p, price, o, n), url = URL.createObjectURL(doc.output('blob'));
     if (!window.open(url, '_blank')) doc.save(`etiquetas-${p.sku}.pdf`);
